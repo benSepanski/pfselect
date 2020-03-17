@@ -35,11 +35,11 @@ backtest_portfolio_selector <- function(pf_select,
   wealth_factor <- 1.0
   # Run some basic sanity checks on the arguments
   if(missing(last_trading_period)) {
-    last_trading_period <- pfselect$ntrading_periods
+    last_trading_period <- pf_select$ntrading_periods
   }
-  else if(last_trading_period > pfselect$ntrading_periods) {
+  else if(last_trading_period > pf_select$ntrading_periods) {
     warn(glue::glue("max_trading_period of {last_trading_period} is greater \\
-than last trading period of {pfselect$ntrading_periods}."))
+than last trading period of {pf_select$ntrading_periods}."))
   }
   if(first_trading_period > last_trading_period) {
     stop("first trading period is after last trading period.")

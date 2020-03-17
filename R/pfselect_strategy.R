@@ -55,8 +55,8 @@ new_pfselectstrat <- function(price_relatives,
   assert_that(is.numeric(transaction_rate))
 
   structure(
-    list(nassets = nrow(price_relatives),
-         ntrading_periods = ncol(price_relatives),
+    list(nassets = ncol(price_relatives),
+         ntrading_periods = nrow(price_relatives),
          price_relatives = price_relatives,
          transaction_rate = transaction_rate,
          ...),
@@ -185,7 +185,7 @@ next_portfolio.default <- function(strategy, trading_period, portfolio) {
 new_buyandhold <- function(price_relatives, transaction_rate,
                            ..., class = character()) {
   new_pfselectstrat(price_relatives, transaction_rate,
-                    ..., c(class, "buyandhold"))
+                    ..., class = c(class, "buyandhold"))
 }
 
 #' @describeIn validate_pfselectstrat validates a buyandhold object
@@ -276,13 +276,13 @@ first_portfolio.best_stock <- function(strategy, trading_period) {
     stop("start trading period is after last trading period")
   }
   # compute the best stock
-  best_stock <- price_relatives %>%
-    `[`(trading_period:last_trading_period, ) %>%
+  best_stock <- strategy$price_relatives %>%
+    `[`(trading_period:strategy$last_trading_period, ) %>%
     purrr::array_branch(2L) %>%
     purrr::map_dbl(~reduce(.x, `*`)) %>%  # get wealth of each stock
     which.max()                           # pick the best one
 
-  portfolio <- rep(0, nassets)
+  portfolio <- rep(0, strategy$nassets)
   portfolio[best_stock] <- 1.0
   portfolio
 }

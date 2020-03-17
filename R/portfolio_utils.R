@@ -62,7 +62,7 @@ price_adjusted_portfolio <- function(price_relatives, portfolio) {
   assert_that(is_numeric_vector(portfolio))
   assert_that(are_equal(length(portfolio), length(price_relatives)))
   # return the rebalanced portfolio
-  portfolio * price_relatives / (portfolio %*% price_relatives)
+  portfolio * price_relatives / as.double(portfolio %*% price_relatives)
 }
 
 #' Return the factor by which wealth increases
