@@ -15,14 +15,14 @@
 #'      representing the true prices of the assets.
 #'
 #' @importFrom magrittr %>%
-#' @importFrom assertthat assertthat are_equal
+#' @importFrom assertthat assert_that are_equal
 #'
 prices_from_relatives <- function(price_relatives, initial_prices) {
   # type and dimension checks
-  assertthat(is_numeric_vector(initial_prices))
-  assertthat(is.numeric(price_relatives))
-  assertthat(is.matrix(price_relatives))
-  assertthat(are_equal(ncol(price_relatives), length(initial_prices)))
+  assert_that(is_numeric_vector(initial_prices))
+  assert_that(is.numeric(price_relatives))
+  assert_that(is.matrix(price_relatives))
+  assert_that(are_equal(ncol(price_relatives), length(initial_prices)))
 
   price_relatives %>%
     purrr::array_branch(2L) %>%
@@ -54,13 +54,13 @@ prices_from_relatives <- function(price_relatives, initial_prices) {
 #' @returns A numeric vector whose \eqn{i}th entry is the portion of total
  #'      wealth in asset \eqn{i} (according to the new prices).
  #'
- #' @importFrom assertthat assertthat are_equal
+ #' @importFrom assertthat assert_that are_equal
  #'
 price_adjusted_portfolio <- function(price_relatives, portfolio) {
   # some type checks
-  assertthat(is_numeric_vector(price_relatives))
-  assertthat(is_numeric_vector(portfolio))
-  assertthat(are_equal(length(portfolio), length(price_relatives)))
+  assert_that(is_numeric_vector(price_relatives))
+  assert_that(is_numeric_vector(portfolio))
+  assert_that(are_equal(length(portfolio), length(price_relatives)))
   # return the rebalanced portfolio
   portfolio * price_relatives / (portfolio %*% price_relatives)
 }
@@ -100,17 +100,17 @@ price_adjusted_portfolio <- function(price_relatives, portfolio) {
 #'      increases, i.e. if \eqn{S_t} is wealth
 #'      at trading period \eqn{t}, returns \eqn{\frac{S_t}{S_{t-1}}},
 #'
-#' @importFrom assertthat assertthat are_equal
+#' @importFrom assertthat assert_that are_equal
 #'
 wealth_increase_factor <- function(price_relatives, tr,
                                    prev_portfolio, portfolio,
                                    tol = 1e-10, maxit = 15) {
   # make sure we have vectors
-  assertthat(is_numeric_vector(price_relatives))
-  assertthat(is_numeric_vector(portfolio))
-  assertthat(is_numeric_vector(prev_portfolio))
-  assertthat(are_equal(length(price_relatives), length(portfolio)))
-  assertthat(are_equal(length(prev_portfolio), length(portfolio)))
+  assert_that(is_numeric_vector(price_relatives))
+  assert_that(is_numeric_vector(portfolio))
+  assert_that(is_numeric_vector(prev_portfolio))
+  assert_that(are_equal(length(price_relatives), length(portfolio)))
+  assert_that(are_equal(length(prev_portfolio), length(portfolio)))
 
   # To move from portfolio b -> (b+a) with prices p and transaction
   # rate r and total wealth S, we have

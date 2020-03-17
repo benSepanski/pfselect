@@ -6,12 +6,12 @@
 #' @return TRUE if x is close to an integer and
 #'      false elsewhere
 #'
-#' @importFrom assertthat assertthat issclar
+#' @importFrom assertthat assert_that issclar
 #' @importFrom rlang is_double
 #'
 is_whole_number <- function(x) {
   asserthat(is.scalar(x))
-  assertthat(is.numeric(x))
+  assert_that(is.numeric(x))
   abs(x - round(x)) < .Machine$double.eps ^ 2
 }
 

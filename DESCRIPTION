@@ -13,5 +13,10 @@ Imports:
     magrittr,
     purrr,
     assertthat,
-    rlang
+    rlang,
+    glue,
+    stringr,
+    dplyr,
+    rvest,
+    httr
 RoxygenNote: 7.1.0

@@ -13,6 +13,7 @@
 #' msci_link("Austria")
 #'
 #' @importFrom magrittr %>%
+#'
 msci_link <- function(country_name) {
   country_name %>%
     stringr::str_to_lower() %>%
