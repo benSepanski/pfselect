@@ -6,7 +6,7 @@
 #' @return TRUE if x is close to an integer and
 #'      false elsewhere
 #'
-#' @importFrom assertthat assert_that issclar
+#' @importFrom assertthat assert_that is.scalar
 #' @importFrom rlang is_double
 #'
 is_whole_number <- function(x) {
