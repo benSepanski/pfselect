@@ -8,7 +8,7 @@ first_portfolio(strategy, trading_period)
 }
 \arguments{
 \item{strategy}{the strategy to use when determining the first portfolio.
-Should be of class \code{pfselectstrat}}
+Should be of class \link[=new_pfselectstrat]{pfselectstrat}}
 
 \item{trading_period}{the "first" trading period, i.e. we might
     be starting backtesting in the middle of our data.

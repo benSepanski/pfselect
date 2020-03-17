@@ -2,17 +2,28 @@
 % Please edit documentation in R/pfselect_strategy.R
 \name{validate_pfselectstrat}
 \alias{validate_pfselectstrat}
+\alias{validate_buyandhold}
 \title{validates a \code{"pf_selectstrat"} class}
 \usage{
 validate_pfselectstrat(x)
+
+validate_buyandhold(x)
 }
 \arguments{
-\item{x}{the \code{"pf_selectstrat"} instance to validate}
+\item{x}{the \link[=new_pfselectstrat]{pfselectstrat} instance to validate}
 }
 \description{
 Asserts that the given object has values \code{nassets}
-and \code{ntime_periods} which are both positive whole numbers
+and \code{ntrading_periods} which are both positive whole numbers.
+Makes sure they match the dimensions of price_relatives as for a
+\link[=new_pfselectstrat]{pfselectstrat} object. Makes sure
+transaction_rate is in \eqn{[0,1]} and scalar
 }
+\section{Functions}{
+\itemize{
+\item \code{validate_buyandhold}: validates a buyandhold object
+}}
+
 \seealso{
 Other pfselectstrat: 
 \code{\link{first_portfolio}()},

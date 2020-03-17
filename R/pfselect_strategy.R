@@ -5,44 +5,60 @@
 #' makes a new \code{"pfselectstrat"} class
 #'
 #' Creates a \code{"pfselectstrat"} class, which has a number
-#' of assets and a number of time periods. We think of each
-#' time period as corresponding to a change of prices. At the
-#' beginning of the time period the prices have not yet changed,
-#' and at the end of the time period they have changed to the next prices.
+#' of assets and a number of trading periods. We think of each
+#' trading period as corresponding to a change of prices. At the
+#' beginning of the trading period the prices have not yet changed,
+#' and at the end of the trading period they have changed to the next prices.
+#'
+#' The class is functionally a list with named entries
+#' \describe{
+#'    \item{nassets}{The number of assets}
+#'    \item{ntrading_periods}{The number of trading periods}
+#'    \item{price_relatives}{A \code{ntrading_periods} x \code{nassets}
+#'    matrix of price relatives (price after trading period / price
+#'    at beginning of trading period)}
+#'    \item{transaction_rate}{A rate in \eqn{[0,1]} which is
+#'    lost during each buy/sell}
+#' }
 #'
 #' For validation of \code{pfselectstrat} objects, see
 #' \code{\link{validate_pfselectstrat}()}
 #'
-#' @note This is a class that should be built on, not instantiated
-#'     and used directly by end users
+#' @note This is a class with no next_portfolio and no first_portfolio
+#'     method
 #'
-#' @param nassets A positive whole number, the number of assets
-#' @param ntime_periods A positive whole number, the number of time periods.
-#'     The prices before the first trading period we think of as p_0,
-#'     and the first trading period occurs right before the prices change
-#'     to p_1
+#' @param price_relatives A T x n matrix of price relatives,
+#'     where each row represents a trading period and each column
+#'     represents an asset. A price relative is the
+#'     price after the trading period divided by the price
+#'     during the trading period.
+#' @param transaction_rate a transaction rate in \eqn{[0,1]},
+#'     the percentage of each buy/sell lost to fees
 #' @param ... Arguments for subclassing, these are NOT set as attributes
 #'     but instead are passed as arguments into the list which
 #'     underlies this data structure
 #' @param class A character vector of the child classes this instance
 #'     has (or \code{character()} if no child classes)
 #'
-#'  @return A new pfselectstrat object with the given
-#'      \code{nassets} and \code{ntime_periods}
+#'  @return A new pfselectstrat object with the given \code{price_relatives}
+#'      \code{nassets} and \code{ntrading_periods}
 #'
-#' @keywords internal
 #' @family pfselectstrat
 #'
 #' @importFrom assertthat assert_that
-new_pfselectstrat <- function(nassets, ntime_periods, ...,
+new_pfselectstrat <- function(price_relatives,
+                              transaction_rate,
+                              ...,
                               class = character()) {
-  # make sure nassets and ntime_periods are scalar
-  assert_that(is.numeric(nassets))
-  assert_that(is.numeric(ntime_periods))
+  # make sure price_relatives and transaction_rate are numeric
+  assert_that(is.numeric(price_relatives))
+  assert_that(is.numeric(transaction_rate))
 
   structure(
-    list(nassets = nassets,
-         ntime_periods = ntime_periods,
+    list(nassets = nrow(price_relatives),
+         ntrading_periods = ncol(price_relatives),
+         price_relatives = price_relatives,
+         transaction_rate = transaction_rate,
          ...),
     class = c(class, "pfselectstrat")
   )
@@ -51,21 +67,37 @@ new_pfselectstrat <- function(nassets, ntime_periods, ...,
 #' validates a \code{"pf_selectstrat"} class
 #'
 #' Asserts that the given object has values \code{nassets}
-#' and \code{ntime_periods} which are both positive whole numbers
+#' and \code{ntrading_periods} which are both positive whole numbers.
+#' Makes sure they match the dimensions of price_relatives as for a
+#' \link[=new_pfselectstrat]{pfselectstrat} object. Makes sure
+#' transaction_rate is in \eqn{[0,1]} and scalar
 #'
-#' @param x the \code{"pf_selectstrat"} instance to validate
+#' @param x the \link[=new_pfselectstrat]{pfselectstrat} instance to validate
 #'
 #' @family pfselectstrat
-#' @importFrom assertthat assert_that has_name
+#' @importFrom assertthat assert_that has_name are_equal
+#' @importFrom rlang is_scalar_double
 validate_pfselectstrat <- function(x) {
   values <- unclass(x)
-  # make sure we have nassets and ntime_periods
-  assert_that(has_name(values), c("nassets", "ntime_periods"))
-  # make sure nassets and ntime_periods are positive whole numbers
+  # make sure we have all required member attributes
+  assert_that(has_name(values),
+              c("nassets", "ntrading_periods",
+                "price_relatives", "transaction_rate"))
+  # make sure nassets and ntrading_periods are positive whole numbers
   assert_that(is_whole_number(values$nassets))
-  assert_that(is_whole_number(values$ntime_periods))
+  assert_that(is_whole_number(values$ntrading_periods))
   assert_that(values$nassets > 0)
-  assert_that(values$ntime_periods > 0)
+  assert_that(values$ntrading_periods > 0)
+  # make sure price relatives is a numeric matrix of non-negative
+  # entries which is ntrading_periods x nassets
+  assert_that(is.matrix(values$price_relatives))
+  assert_that(is.numeric(values$price_relatives))
+  assert_that(are_equal(values$nassets, ncol(values$price_relatives)))
+  assert_that(are_equal(values$ntrading_periods, nrow(values$price_relatives)))
+  assert_that(all(values$price_relatives >= 0))
+  # transaction rate checks
+  assert_that(is_scalar_double(values$transaction_rate))
+  assert_that(values$transaction_rate > 0 && values$transaction_rate < 1)
 }
 
 #' Get first portfolio from strategy
@@ -74,7 +106,7 @@ validate_pfselectstrat <- function(x) {
 #' We assume trading is about to begin at the given trading period
 #'
 #' @param strategy the strategy to use when determining the first portfolio.
-#'     Should be of class \code{pfselectstrat}
+#'     Should be of class \link[=new_pfselectstrat]{pfselectstrat}
 #' @param trading_period the "first" trading period, i.e. we might
 #'     be starting backtesting in the middle of our data.
 #'
@@ -101,7 +133,7 @@ first_portfolio.default <- function(strategy, trading_period) {
 #' We assume trading is about to begin at the given trading period.
 #'
 #' @param strategy the strategy to use when determining the first portfolio.
-#'     Should be of class \code{pfselectstrat}
+#'     Should be of class \link[=new_pfselectstrat]{pfselectstrat}
 #' @param trading_period the "first" trading period, i.e. we might
 #'     be starting backtesting in the middle of our data.
 #' @param portfolio The portfolio at the beginning of this trading
@@ -135,56 +167,29 @@ next_portfolio.default <- function(strategy, trading_period, portfolio) {
 #' makes a \code{buyandhold} strategy
 #'
 #' Makes a \code{buyandhold} strategy from the given price
-#' relatives, which is a subclass of \code{pfselectstrat}.
+#' relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 #'
 #' To validate the object use \code{\link{validate_buyandhold}}.
 #'
-#' @note End users should not call \link{new_buyandhold} directly,
-#'     but instead use one of its subclasses with a defined
-#'     initialization method.
+#' @note An instance which is just of class \code{buyandhold} and on subclass
+#'     has no first_portfolio method
 #'
-#' @keywords internal
 #' @family buyandhold
 #'
 #' @inheritParams new_pfselectstrat
-#' @param price_relatives A T x n matrix of price relatives,
-#'     where each row represents a trading period and each column
-#'     represents an asset. A price relative is the current
-#'     price divided by the previous price.
 #'
 #' @seealso new_pfselectstrat
 #'
 #' @return a new \code{buyandhold} object with the given price relatives
 #'
-new_buyandhold <- function(price_relatives, ..., class = character()) {
-  new_pfselectstrat(nassets = ncol(price_relatives),
-                    ntime_periods = nrow(price_relatives),
-                    price_relatives = price_relatives,
-                    ...,
-                    class = c(class, "buyandhold"))
+new_buyandhold <- function(price_relatives, transaction_rate,
+                           ..., class = character()) {
+  new_pfselectstrat(price_relatives, transaction_rate,
+                    ..., c(class, "buyandhold"))
 }
 
-#' validates a buyandhold object
-#'
-#' Asserts that the dimensions of the price_relatives matches
-#' the number of trading period and number of assets,
-#' that all the price relatives are non-negative,
-#' as well as type checking. Calls \code{\link{validate_pfselectstrat}}.
-#'
-#' @param x the \code{"buyandhold"} instance to validate
-#'
-#' @family buyandhold
-#' @importFrom assertthat assert_that has_name are_equal
-validate_buyandhold <- function(x) {
-  validate_pfselectstrat(x)
-  values <- unclass(x)
-  assert_that(has_name(x, "price_relatives"))
-  assert_that(is.matrix(values$price_relatives))
-  assert_that(is.numeric(values$price_relatives))
-  assert_that(are_equal(values$nassets, ncol(values$price_relatives)))
-  assert_that(are_equal(values$ntime_periods, nrow(values$price_relatives)))
-  assert_that(all(values$price_relatives >= 0))
-}
+#' @describeIn validate_pfselectstrat validates a buyandhold object
+validate_buyandhold <- function(x) { validate_pfselectstrat(x) }
 
 #' @export
 next_portfolio.buyandhold <- function(strategy, trading_period, portfolio) {
@@ -197,8 +202,10 @@ next_portfolio.buyandhold <- function(strategy, trading_period, portfolio) {
 #' @describeIn new_buyandhold
 #'
 #' Starts with a uniform amount of wealth in each stock.
-new_uniform_bah <- function(price_relatives, ..., class = character()) {
+new_uniform_bah <- function(price_relatives, transaction_rate,
+                            ..., class = character()) {
   new_buyandhold(price_relatives = price_relatives,
+                 transaction_rate = transaction_rate,
                  ...,
                  class = c(class, "uniform_bah"))
 }
@@ -212,7 +219,9 @@ new_uniform_bah <- function(price_relatives, ..., class = character()) {
 #' @seealso new_uniform_bah
 #'
 #' @export
-uniform_bah <- function(price_relatives) new_uniform_bah(price_relatives)
+uniform_bah <- function(price_relatives, transaction_rate) {
+   new_uniform_bah(price_relatives, transaction_rate)
+}
 
 #' @export
 first_portfolio.uniform_bah <- function(strategy, trading_period) {
@@ -223,8 +232,8 @@ first_portfolio.uniform_bah <- function(strategy, trading_period) {
 
 #' @describeIn new_buyandhold
 #'
-#' Makes a buyandhold strategy which invests all its wealth
-#' in the best stock from the start of the trading period
+#' Makes a \link[=new_buyandhold]{buyandhold} strategy which invests all its
+#' wealth in the best stock from the start of the trading period
 #' through the given last_trading_period
 #'
 #' @param last_trading_period the last trading period after
@@ -232,9 +241,11 @@ first_portfolio.uniform_bah <- function(strategy, trading_period) {
 #'      which stock is the best for the \code{best_stock} strategy).
 #'
 new_best_stock <- function(price_relatives,
+                           transaction_rate,
                            last_trading_period,
                            ..., class = character()) {
   new_buyandhold(price_relatives = price_relatives,
+                 transaction_rate = transaction_rate,
                  last_trading_period = last_trading_period,
                  ...,
                  class = c(class, "best_stock"))
@@ -252,11 +263,11 @@ new_best_stock <- function(price_relatives,
 #' @seealso new_best_stock
 #'
 #' @export
-best_stock <- function(price_relatives, last_trading_period) {
+best_stock <- function(price_relatives, transaction_rate, last_trading_period) {
   if(missing(last_trading_period)) {
     last_trading_period <- nrow(price_relatives)
   }
-  new_best_stock(price_relatives, last_trading_period)
+  new_best_stock(price_relatives, transaction_rate, last_trading_period)
 }
 
 #' @export

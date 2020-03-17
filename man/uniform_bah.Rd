@@ -4,27 +4,30 @@
 \alias{uniform_bah}
 \title{Makes a new \code{uniform_bah} strategy}
 \usage{
-uniform_bah(price_relatives)
+uniform_bah(price_relatives, transaction_rate)
 }
 \arguments{
 \item{price_relatives}{A T x n matrix of price relatives,
 where each row represents a trading period and each column
-represents an asset. A price relative is the current
-price divided by the previous price.}
+represents an asset. A price relative is the
+price after the trading period divided by the price
+during the trading period.}
+
+\item{transaction_rate}{a transaction rate in \eqn{[0,1]},
+the percentage of each buy/sell lost to fees}
 }
 \value{
 a new \code{buyandhold} object with the given price relatives
 }
 \description{
 Makes a \code{buyandhold} strategy from the given price
-relatives, which is a subclass of \code{pfselectstrat}.
+relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \seealso{
 new_uniform_bah
 
 Other buyandhold: 
 \code{\link{best_stock}()},
-\code{\link{new_buyandhold}()},
-\code{\link{validate_buyandhold}()}
+\code{\link{new_buyandhold}()}
 }
 \concept{buyandhold}

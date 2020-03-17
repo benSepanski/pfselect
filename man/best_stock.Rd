@@ -4,13 +4,17 @@
 \alias{best_stock}
 \title{Makes a new \code{best_stock} strategy}
 \usage{
-best_stock(price_relatives, last_trading_period)
+best_stock(price_relatives, transaction_rate, last_trading_period)
 }
 \arguments{
 \item{price_relatives}{A T x n matrix of price relatives,
 where each row represents a trading period and each column
-represents an asset. A price relative is the current
-price divided by the previous price.}
+represents an asset. A price relative is the
+price after the trading period divided by the price
+during the trading period.}
+
+\item{transaction_rate}{a transaction rate in \eqn{[0,1]},
+the percentage of each buy/sell lost to fees}
 
 \item{last_trading_period}{the last trading period after
 which we "sell" our stocks (we need this to determine
@@ -21,7 +25,7 @@ a new \code{buyandhold} object with the given price relatives
 }
 \description{
 Makes a \code{buyandhold} strategy from the given price
-relatives, which is a subclass of \code{pfselectstrat}.
+relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \note{
 if last_trading_period is missing, it defaults
@@ -32,7 +36,6 @@ new_best_stock
 
 Other buyandhold: 
 \code{\link{new_buyandhold}()},
-\code{\link{uniform_bah}()},
-\code{\link{validate_buyandhold}()}
+\code{\link{uniform_bah}()}
 }
 \concept{buyandhold}

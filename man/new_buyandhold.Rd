@@ -6,17 +6,27 @@
 \alias{new_best_stock}
 \title{makes a \code{buyandhold} strategy}
 \usage{
-new_buyandhold(price_relatives, ..., class = character())
+new_buyandhold(price_relatives, transaction_rate, ..., class = character())
 
-new_uniform_bah(price_relatives, ..., class = character())
+new_uniform_bah(price_relatives, transaction_rate, ..., class = character())
 
-new_best_stock(price_relatives, last_trading_period, ..., class = character())
+new_best_stock(
+  price_relatives,
+  transaction_rate,
+  last_trading_period,
+  ...,
+  class = character()
+)
 }
 \arguments{
 \item{price_relatives}{A T x n matrix of price relatives,
 where each row represents a trading period and each column
-represents an asset. A price relative is the current
-price divided by the previous price.}
+represents an asset. A price relative is the
+price after the trading period divided by the price
+during the trading period.}
+
+\item{transaction_rate}{a transaction rate in \eqn{[0,1]},
+the percentage of each buy/sell lost to fees}
 
 \item{...}{Arguments for subclassing, these are NOT set as attributes
 but instead are passed as arguments into the list which
@@ -25,8 +35,8 @@ underlies this data structure}
 \item{class}{A character vector of the child classes this instance
     has (or \code{character()} if no child classes)
 
- @return A new pfselectstrat object with the given
-     \code{nassets} and \code{ntime_periods}}
+ @return A new pfselectstrat object with the given \code{price_relatives}
+     \code{nassets} and \code{ntrading_periods}}
 
 \item{last_trading_period}{the last trading period after
 which we "sell" our stocks (we need this to determine
@@ -37,7 +47,7 @@ a new \code{buyandhold} object with the given price relatives
 }
 \description{
 Makes a \code{buyandhold} strategy from the given price
-relatives, which is a subclass of \code{pfselectstrat}.
+relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \details{
 To validate the object use \code{\link{validate_buyandhold}}.
@@ -46,23 +56,20 @@ To validate the object use \code{\link{validate_buyandhold}}.
 \itemize{
 \item \code{new_uniform_bah}: Starts with a uniform amount of wealth in each stock.
 
-\item \code{new_best_stock}: Makes a buyandhold strategy which invests all its wealth
-in the best stock from the start of the trading period
+\item \code{new_best_stock}: Makes a \link[=new_buyandhold]{buyandhold} strategy which invests all its
+wealth in the best stock from the start of the trading period
 through the given last_trading_period
 }}
 
 \note{
-End users should not call \link{buyandhold} directly,
-    but instead use one of its subclasses with a defined
-    initialization method.
+An instance which is just of class \code{buyandhold} and on subclass
+    has no first_portfolio method
 }
 \seealso{
 new_pfselectstrat
 
 Other buyandhold: 
 \code{\link{best_stock}()},
-\code{\link{uniform_bah}()},
-\code{\link{validate_buyandhold}()}
+\code{\link{uniform_bah}()}
 }
 \concept{buyandhold}
-\keyword{internal}

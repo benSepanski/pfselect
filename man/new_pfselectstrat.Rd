@@ -4,15 +4,17 @@
 \alias{new_pfselectstrat}
 \title{makes a new \code{"pfselectstrat"} class}
 \usage{
-new_pfselectstrat(nassets, ntime_periods, ..., class = character())
+new_pfselectstrat(price_relatives, transaction_rate, ..., class = character())
 }
 \arguments{
-\item{nassets}{A positive whole number, the number of assets}
+\item{price_relatives}{A T x n matrix of price relatives,
+where each row represents a trading period and each column
+represents an asset. A price relative is the
+price after the trading period divided by the price
+during the trading period.}
 
-\item{ntime_periods}{A positive whole number, the number of time periods.
-The prices before the first trading period we think of as p_0,
-and the first trading period occurs right before the prices change
-to p_1}
+\item{transaction_rate}{a transaction rate in \eqn{[0,1]},
+the percentage of each buy/sell lost to fees}
 
 \item{...}{Arguments for subclassing, these are NOT set as attributes
 but instead are passed as arguments into the list which
@@ -21,23 +23,34 @@ underlies this data structure}
 \item{class}{A character vector of the child classes this instance
     has (or \code{character()} if no child classes)
 
- @return A new pfselectstrat object with the given
-     \code{nassets} and \code{ntime_periods}}
+ @return A new pfselectstrat object with the given \code{price_relatives}
+     \code{nassets} and \code{ntrading_periods}}
 }
 \description{
 Creates a \code{"pfselectstrat"} class, which has a number
-of assets and a number of time periods. We think of each
-time period as corresponding to a change of prices. At the
-beginning of the time period the prices have not yet changed,
-and at the end of the time period they have changed to the next prices.
+of assets and a number of trading periods. We think of each
+trading period as corresponding to a change of prices. At the
+beginning of the trading period the prices have not yet changed,
+and at the end of the trading period they have changed to the next prices.
 }
 \details{
+The class is functionally a list with named entries
+\describe{
+   \item{nassets}{The number of assets}
+   \item{ntrading_periods}{The number of trading periods}
+   \item{price_relatives}{A \code{ntrading_periods} x \code{nassets}
+   matrix of price relatives (price after trading period / price
+   at beginning of trading period)}
+   \item{transaction_rate}{A rate in \eqn{[0,1]} which is
+   lost during each buy/sell}
+}
+
 For validation of \code{pfselectstrat} objects, see
 \code{\link{validate_pfselectstrat}()}
 }
 \note{
-This is a class that should be built on, not instantiated
-    and used directly by end users
+This is a class with no next_portfolio and no first_portfolio
+    method
 }
 \seealso{
 Other pfselectstrat: 
@@ -46,4 +59,3 @@ Other pfselectstrat:
 \code{\link{validate_pfselectstrat}()}
 }
 \concept{pfselectstrat}
-\keyword{internal}
