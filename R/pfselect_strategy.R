@@ -2,7 +2,7 @@
 # pfselectstrat -----------------------------------------------------------
 
 
-#' makes a new \code{"pfselectstrat"} class
+#' makes a new \code{\link[=new_pfselectstrat]{pfselectstrat}} class
 #'
 #' Creates a \code{"pfselectstrat"} class, which has a number
 #' of assets and a number of trading periods. We think of each
@@ -164,9 +164,9 @@ next_portfolio.default <- function(strategy, trading_period, portfolio) {
 
 # buyandhold --------------------------------------------------------------
 
-#' makes a \code{buyandhold} strategy
+#' makes a \code{\link[=new_buyandhold]{buyandhold}} strategy
 #'
-#' Makes a \code{buyandhold} strategy from the given price
+#' Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 #' relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 #'
 #' To validate the object use \code{\link{validate_buyandhold}}.
