@@ -14,5 +14,6 @@ TRUE if x is close to an integer and
      false elsewhere
 }
 \description{
-Test whether x is close to an integer
+Test whether x is close to an integer,
+asserts that x is a numeric scalar
 }

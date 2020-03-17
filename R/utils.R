@@ -1,6 +1,7 @@
 #' tests whether x is close to an integer
 #'
-#' Test whether x is close to an integer
+#' Test whether x is close to an integer,
+#' asserts that x is a numeric scalar
 #'
 #' @param x the numeric scalar vector to test
 #' @return TRUE if x is close to an integer and
