@@ -25,3 +25,25 @@ is_whole_number <- function(x) {
 is_numeric_vector <- function(x) {
   is.numeric(x) && is_vector(x)
 }
+
+#' Computes Euclidean Projection onto simplex
+#'
+#' Returns the closest vector on the simplex of radius
+#' r
+#'
+#' Returns minimizer of
+#' \deqn{\frac{1}{2}||w-v||^2,  v^T1 = r, v >= 0}
+#' using method from the following paper:
+#' \url{https://stanford.edu/~jduchi/projects/DuchiShSiCh08.pdf}.
+#'
+#' @param v The vector to project
+#' @param r (DEFAULT 1) radius of simplex
+#' @return the projection of \code{v} onto the \code{r}-simplex
+#'
+project_to_simplex <- function(v, r = 1) {
+  u <- sort(v, decreasing = TRUE)
+  test_vec <- u - (cumsum(u) - r) / 1:length(u)
+  rho <- max(which(test_vec > 0))
+  theta <- u[rho] - test_vec[rho]
+  pmax(v - theta, 0)
+}

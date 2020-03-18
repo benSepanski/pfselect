@@ -26,7 +26,7 @@
 #'     }
 #'
 #' @importFrom magrittr %>%
-#' @importFrom dplyr slice
+#' @importFrom assertthat assert_that are_equal
 #' @export
 #'
 backtest_portfolio_selector <- function(pf_select,
@@ -61,6 +61,8 @@ than last trading period of {pf_select$ntrading_periods}."))
     per <- first_trading_period + index - 1
     # get the next portfolio, record it and the cumulative wealth increase
     next_portfolio <- next_portfolio(pf_select, per, portfolio)
+    assert_that(are_equal(sum(next_portfolio), 1))
+    assert_that(all(next_portfolio >= 0))
     increase_factor <- wealth_increase_factor(pf_select$price_relatives[per, ],
                                               pf_select$transaction_rate,
                                               portfolio,

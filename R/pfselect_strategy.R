@@ -580,5 +580,5 @@ before the current trading_period."))
   if(gamma <= 0) {
     return(portfolio)
   }
-  portfolio + gamma * mean_zero_pred_pr
+  project_to_simplex(portfolio + gamma * mean_zero_pred_pr)
 }
