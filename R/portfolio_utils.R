@@ -32,6 +32,29 @@ prices_from_relatives <- function(price_relatives, initial_prices) {
     matrix(ncol = ncol(price_relatives))
 }
 
+#' Return historical price means computed with decay factor
+#'
+#' We define the historical price mean MA_t at time t
+#' to be
+#' \deqn{MA_t = decay_factor \cdot p_t + (1-decay_factor) \cdot MA_{t-1}}
+#' And \eqn{MA_1 = p_1}.
+#'
+#'  @param prices A matrix of prices, each row is a time period
+#'      and each column an asset
+#'  @param decay_factor the decay factor for the mean (see description)
+#'  @return A matrix with the same dimension as \code{prices}
+#'      with historical price means as the entries
+#'
+#'  @importFrom magrittr %>%
+#'
+historical_price_means <- function(prices, decay_factor = 0.5) {
+  prices %>%
+    purrr::array_branch(2L) %>%
+    purrr::map(purrr::accumulate, ~decay_factor*.y + (1-decay_factor)*.x) %>%
+    purrr::flatten_dbl() %>%
+    matrix(nrow = nrow(prices))
+}
+
 
 #' renormalizes portfolio to show total portion of wealth in each asset
 #'
@@ -51,7 +74,7 @@ prices_from_relatives <- function(price_relatives, initial_prices) {
 #'     the \eqn{i}th entry representing the portion of total wealth
 #'     in asset \eqn{i}.
 #'
-#' @returns A numeric vector whose \eqn{i}th entry is the portion of total
+#' @return A numeric vector whose \eqn{i}th entry is the portion of total
  #'      wealth in asset \eqn{i} (according to the new prices).
  #'
  #' @importFrom assertthat assert_that are_equal

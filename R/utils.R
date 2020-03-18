@@ -11,9 +11,9 @@
 #' @importFrom rlang is_double
 #'
 is_whole_number <- function(x) {
-  asserthat(is.scalar(x))
+  assert_that(is.scalar(x))
   assert_that(is.numeric(x))
-  abs(x - round(x)) < .Machine$double.eps ^ 2
+  abs(x - round(x)) < .Machine$double.eps ^ 0.5
 }
 
 #' checks if x is a numeric vector

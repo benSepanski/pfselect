@@ -81,9 +81,9 @@ new_pfselectstrat <- function(price_relatives,
 validate_pfselectstrat <- function(x) {
   values <- unclass(x)
   # make sure we have all required member attributes
-  assert_that(has_name(values),
+  assert_that(has_name(values,
               c("nassets", "ntrading_periods",
-                "price_relatives", "transaction_rate"))
+                "price_relatives", "transaction_rate")))
   # make sure nassets and ntrading_periods are positive whole numbers
   assert_that(is_whole_number(values$nassets))
   assert_that(is_whole_number(values$ntrading_periods))
@@ -98,7 +98,7 @@ validate_pfselectstrat <- function(x) {
   assert_that(all(values$price_relatives >= 0))
   # transaction rate checks
   assert_that(is_scalar_double(values$transaction_rate))
-  assert_that(values$transaction_rate > 0 && values$transaction_rate < 1)
+  assert_that(values$transaction_rate >= 0 && values$transaction_rate <= 1)
 
   x
 }
@@ -278,7 +278,7 @@ best_stock <- function(price_relatives, transaction_rate, last_trading_period) {
     last_trading_period <- nrow(price_relatives)
   }
   bs <- new_best_stock(price_relatives, transaction_rate, last_trading_period)
-  validate_best_stock(bs)
+  validate_buyandhold(bs)
 }
 
 #' @export
@@ -299,7 +299,7 @@ first_portfolio.best_stock <- function(strategy, trading_period) {
 }
 
 
-# loadonline --------------------------------------------------------------------
+# onlineLOAD --------------------------------------------------------------------
 
 
 #' Implements the LOAD Online PS System
@@ -315,16 +315,16 @@ first_portfolio.best_stock <- function(strategy, trading_period) {
 #' This method was developed in the following paper:
 #' \url{https://www.sciencedirect.com/science/article/abs/pii/S0950705119303922#b19}
 #'
-#' Returns a \code{loadonline} class object,
+#' Returns a \code{onlineLOAD} class object,
 #' a subclass of \code{\link[=new_pfselectstrat]{pfselectstrat}}
 #'
 #' Initial portfolio is uniform.
 #'
-#' For validation see \code{\link{validate_loadonline}()}.
+#' For validation see \code{\link{validate_onlineLOAD}()}.
 #'
-#' @family loadonline
+#' @family onlineLOAD
 #' @keywords internal
-#' @note Users should call the \code{\link{loadonline}} function instead.
+#' @note Users should call the \code{\link{onlineLOAD}} function instead.
 #/'
 #' @inheritParams new_pfselectstrat
 #' @param decay_factor \eqn{\alpha} in the referenced paper, LOAD predicts
@@ -352,11 +352,11 @@ first_portfolio.best_stock <- function(strategy, trading_period) {
 #'     + \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
 #'     same size as \code{prices}
 #'
-#' @return A loadonline class object with the given values
+#' @return A onlineLOAD class object with the given values
 #'
 #' @importFrom assertthat assert_that
 #'
-new_loadonline <- function(price_relatives,
+new_onlineLOAD <- function(price_relatives,
                      transaction_rate,
                      decay_factor,
                      regularization_factor,
@@ -384,27 +384,32 @@ new_loadonline <- function(price_relatives,
                     prices = prices,
                     price_means = price_means,
                     ...,
-                    class = c(class, "loadonline"))
+                    class = c(class, "onlineLOAD"))
 }
 
-#' validate a loadonline class
+#' validate a onlineLOAD class
 #'
-#' Given a loadonline class (see \code{\link{new_loadonline}})
+#' Given a onlineLOAD class (see \code{\link{new_onlineLOAD}})
 #' validates that any numeric constants are scalars,
 #' if they should be non-negative or in \eqn{[0,1]} then they are,
 #' that the price means are correct, and the prices match the price
 #' relatives
 #'
-#' @param x the loadonline object to validate
-#' @family loadonline
+#' @param x the onlineLOAD object to validate
+#' @param check_prices checks prices match price relatives iff this is
+#'     \code{TRUE}. This can be expensive.
+#' @param check_price_means  checks price means match prices iff this is
+#'     \code{TRUE}. This can be expensive.
+#' @family onlineLOAD
 #'
 #' @return the object x
 #'
 #' @importFrom assertthat assert_that are_equal has_name is.scalar
 #' @importFrom rlang is_scalar_double
 #'
-validate_loadonline <- function(x) {
-  validate_pfselect(x)
+validate_onlineLOAD <- function(x, check_prices = TRUE,
+                                check_price_means = TRUE) {
+  validate_pfselectstrat(x)
   values <- unclass(x)
   assert_that(has_name(values,
                        c("decay_factor", "regularization_factor",
@@ -432,39 +437,42 @@ validate_loadonline <- function(x) {
   assert_that(all(values$price_means >= 0))
   # dimension checks
   assert_that(are_equal(ncol(values$prices), values$nassets))
-  assert_that(are_equal(nrow(values$prices), values$ntime_periods + 1))
+  assert_that(are_equal(nrow(values$prices), values$ntrading_periods + 1))
   assert_that(are_equal(ncol(values$price_means), values$nassets))
-  assert_that(are_equal(nrow(values$price_means), values$ntime_periods + 1))
+  assert_that(are_equal(nrow(values$price_means), values$ntrading_periods + 1))
   # Now check prices match price relatives and price_means match
   # decay_factor
-  assert_that(are_equal(
-    prices_from_relatives(values$price_relatives, values$prices[1,]),
-    prices[-1,]
-  ))
-  assert_that(are_equal(
-    historical_price_means(values$prices, decay_factor = values$decay_factor),
-    values$price_means
-  ))
+  if(check_prices) {
+    expected_p <- prices_from_relatives(values$price_relatives,
+                                        values$prices[1,])
+    assert_that(are_equal(expected_p, values$prices))
+  }
+  if(check_price_means) {
+    expected_means <- historical_price_means(values$prices,
+                                             decay_factor = values$decay_factor)
+    assert_that(are_equal(expected_means, values$price_means))
+  }
 
   x
 }
 
-#' creates a loadonline strategy
+#' creates a onlineLOAD strategy
 #'
-#' @family loadonline
+#' @family onlineLOAD
 #'
-#' @inherit new_loadonline description return
-#' @inheritParams new_loadonline
+#' @inherit new_onlineLOAD description return
+#' @inheritParams new_onlineLOAD
+#' @inheritParams validate_onlineLOAD
 #' @param prices (OPTIONAL), initial_prices default to 1 if missing.
-#'     See \code{\link{new_loadonline}} for a description of how to pass them in.
+#'     See \code{\link{new_onlineLOAD}} for a description of how to pass them in.
 #'     Otherwise, they are computed on construction.
-#'  @param price_means (OPTIONAL)
-#'     See \code{\link{new_loadonline}} for a description of how to pass them in.
-#'     Otherwise, they are computed on construction.
+#' @param price_means (OPTIONAL)
+#'    See \code{\link{new_onlineLOAD}} for a description of how to pass them in.
+#'    Otherwise, they are computed on construction.
 #'
 #' @export
 #'
-loadonline <- function(price_relatives,
+onlineLOAD <- function(price_relatives,
                        transaction_rate,
                        decay_factor,
                        regularization_factor,
@@ -472,7 +480,9 @@ loadonline <- function(price_relatives,
                        momentum_threshold,
                        wealth_factor_threshold,
                        prices,
-                       price_means) {
+                       price_means,
+                       check_prices = TRUE,
+                       check_price_means = TRUE) {
   # if prices is missing, assume initial prices are 1
   if(missing(prices)) {
     prices <- prices_from_relatives(price_relatives,
@@ -482,7 +492,7 @@ loadonline <- function(price_relatives,
   if(missing(price_means)) {
     price_means <- historical_price_means(prices, decay_factor)
   }
-  ld <- new_loadonline(price_relatives = price_relatives,
+  ld <- new_onlineLOAD(price_relatives = price_relatives,
                        transaction_rate = transaction_rate,
                        decay_factor = decay_factor,
                        regularization_factor = regularization_factor,
@@ -491,12 +501,50 @@ loadonline <- function(price_relatives,
                        wealth_factor_threshold = wealth_factor_threshold,
                        prices = prices,
                        price_means = price_means)
- validate_loadonline(ld)
+ validate_onlineLOAD(ld)
 }
 
 #' @export
-first_portfolio.load_online <- function(strategy, trading_period) {
+first_portfolio.onlineLOAD <- function(strategy, trading_period) {
   first_portfolio.uniform_bah(strategy, trading_period)
+}
+
+#' predicts price according to LOAD strategy
+#'
+#' predicts next prices given previous prices according to LOAD
+#' strategy (see paper mentioned in description of
+#' \code{\link{new_onlineLOAD}})
+#'
+#' @note NO TYPE CHECKING IS PERFORMED... be careful
+#'
+#' @param prev_prices a numeric vector of previous prices
+#' @param historic_mean The historic mean of the prices
+#' @param min_var (OPTIONAL) minimum variance to be determined non-constant
+#' @inheritParams new_onlineLOAD
+#'
+#' @return the predicted next price
+#'
+predict_priceLOAD <- function(prev_prices,
+                              historic_mean,
+                              regularization_factor,
+                              momentum_threshold,
+                              min_var = .Machine$double.eps ^ 0.25) {
+  regularized_slope <- 0
+  if(var(prev_prices) > min_var) {  # avoid constant case
+    # Note glmnet requires we have at least two variables but we only have
+    # one, so we just duplicate the variable and sum them together
+    regularized_slope <- sum(as.numeric(
+      glmnet(x = matrix(rep(1:length(prev_prices), 2), ncol = 2),
+             y = prev_prices,
+             alpha = 0,  # alpha = 0 -> ridge regression
+             lambda = regularization_factor)$beta))
+  }
+  # return max if has momentum
+  if(regularized_slope > momentum_threshold) {
+    return( max(prev_prices) )
+  }
+  # otherwise mean
+  historic_mean
 }
 
 #' @importFrom magrittr %>%
@@ -504,40 +552,27 @@ first_portfolio.load_online <- function(strategy, trading_period) {
 #' @importFrom glmnet glmnet
 #'
 #' @export
-next_portfolio.load_online <- function(strategy, trading_period, portfolio) {
+next_portfolio.onlineLOAD <- function(strategy, trading_period, portfolio) {
   # make sure we have the requisite number of trading periods
-  if(trading_period < strategy$trading_window) {
-    stop(glue::glue("LOAD requires at least trading_window-1 trading periods \\
+  if(trading_period < strategy$time_window) {
+    stop(glue::glue("LOAD requires at least time_window-1 trading periods \\
 before the current trading_period."))
   }
   tp <- trading_period
-  window <- (tp - pf_selector$trading_window + 1):tp
-  # get predicted price based on regularized slope
-  predicted_price <- function(regularized_slope, asset) {
-    if(regularized_slope > pf_selector$momentum_threshold) {
-      return( max(pf_selector$prices[window, ]) )
-    }
-    pf_selector$price_means[tp, asset]
-  }
+  window <- (tp - strategy$time_window + 1):tp
   # run ridge regression on each price
-  # Note glmnet requires we have at least two variables but we only have
-  # one, so we just duplicate the variable and sum them together
-  predicted_price <- pf_selector$prices[window, ] %>%
+  predicted_price <- strategy$prices[window, ] %>%
     array_branch(2L) %>%
-    map(glmnet,
-        x = matrix(rep(1:pf_selector$trading_window, 2), ncol = 2),
-        alpha = 0,  # alpha = 0 -> ridge regression
-        lambda = pf_selector$regularization_factor) %>%
-    map_dbl(`$`, beta) %>%  # get weights
-    map_dbl(sum) %>%
-    imap_dbl(predicted_price)
+    map2_dbl(strategy$price_means[tp, ], predict_priceLOAD,
+             regularization_factor = strategy$regularization_factor,
+             momentum_threshold = strategy$momentum_threshold)
 
   # use predicted price to get price relatives and compute
   # b_{t+1} according to the reference paper
-  pred_price_relatives <- pred_price / pf_selector$prices[tp, ]
+  pred_price_relatives <- predicted_price / strategy$prices[tp, ]
   mean_zero_pred_pr <- pred_price_relatives - mean(pred_price_relatives)
   gamma <- as.numeric(
-    (pf_selector$wealth_factor_threshold - portfolio %*% pred_price_relatives
+    (strategy$wealth_factor_threshold - portfolio %*% pred_price_relatives
      ) / (mean_zero_pred_pr %*% mean_zero_pred_pr)
   )
   # if gamma <= 0 don't rebalance, otherwise do according to the
