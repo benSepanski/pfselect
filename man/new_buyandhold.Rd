@@ -4,7 +4,7 @@
 \alias{new_buyandhold}
 \alias{new_uniform_bah}
 \alias{new_best_stock}
-\title{makes a \code{buyandhold} strategy}
+\title{makes a \code{\link[=new_buyandhold]{buyandhold}} strategy}
 \usage{
 new_buyandhold(price_relatives, transaction_rate, ..., class = character())
 
@@ -46,7 +46,7 @@ which stock is the best for the \code{best_stock} strategy).}
 a new \code{buyandhold} object with the given price relatives
 }
 \description{
-Makes a \code{buyandhold} strategy from the given price
+Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \details{

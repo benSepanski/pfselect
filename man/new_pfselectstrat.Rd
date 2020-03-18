@@ -2,7 +2,7 @@
 % Please edit documentation in R/pfselect_strategy.R
 \name{new_pfselectstrat}
 \alias{new_pfselectstrat}
-\title{makes a new \code{"pfselectstrat"} class}
+\title{makes a new \code{\link[=new_pfselectstrat]{pfselectstrat}} class}
 \usage{
 new_pfselectstrat(price_relatives, transaction_rate, ..., class = character())
 }

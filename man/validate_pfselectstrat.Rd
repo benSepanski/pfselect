@@ -12,6 +12,9 @@ validate_buyandhold(x)
 \arguments{
 \item{x}{the \link[=new_pfselectstrat]{pfselectstrat} instance to validate}
 }
+\value{
+the object x
+}
 \description{
 Asserts that the given object has values \code{nassets}
 and \code{ntrading_periods} which are both positive whole numbers.

@@ -16,15 +16,18 @@ during the trading period.}
 \item{transaction_rate}{a transaction rate in \eqn{[0,1]},
 the percentage of each buy/sell lost to fees}
 
-\item{last_trading_period}{the last trading period after
+\item{last_trading_period}{(OPTIONAL)
+the last trading period after
 which we "sell" our stocks (we need this to determine
-which stock is the best for the \code{best_stock} strategy).}
+which stock is the best for the \code{best_stock} strategy.
+Defaults to the last available trading period
+in \code{price_relatives}}
 }
 \value{
 a new \code{buyandhold} object with the given price relatives
 }
 \description{
-Makes a \code{buyandhold} strategy from the given price
+Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \note{

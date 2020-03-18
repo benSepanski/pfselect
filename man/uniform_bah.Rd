@@ -20,7 +20,7 @@ the percentage of each buy/sell lost to fees}
 a new \code{buyandhold} object with the given price relatives
 }
 \description{
-Makes a \code{buyandhold} strategy from the given price
+Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
 }
 \seealso{
