@@ -1,3 +1,23 @@
+#' Validates and returns a portfolio
+#'
+#' Asserts that \code{portfolio} is a numeric vector
+#' of length \code{nassets} with non-negative entries
+#' that sum to one. Returns \code{portfolio}
+#'
+#' @param portfolio the portfolio to validate
+#' @param nassets the number of assets the portfolio should have
+#' @return portfolio
+#'
+#' @importFrom assertthat assert_that are_equal
+#'
+validate_portfolio <- function(portfolio, nassets) {
+  assert_that(is_numeric_vector(portfolio))
+  assert_that(are_equal(length(portfolio), nassets))
+  assert_that(are_equal(sum(portfolio), 1))
+  assert_that(all(portfolio >= 0))
+  portfolio
+}
+
 #' get prices from price relatives
 #'
 #' Given price_relatives and the initial prices, get the

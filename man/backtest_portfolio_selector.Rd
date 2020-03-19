@@ -5,13 +5,14 @@
 \title{backtest to get cumulative wealth and portfolios over time}
 \usage{
 backtest_portfolio_selector(
-  pf_select,
+  strategy,
   first_trading_period,
-  last_trading_period
+  last_trading_period,
+  check_portfolio = TRUE
 )
 }
 \arguments{
-\item{pf_select}{the \link[=new_pfselectstrat]{pfselectstrat} instance to use}
+\item{strategy}{the \link[=new_pfselectstrat]{pfselectstrat} instance to use}
 
 \item{first_trading_period}{the trading period to start backtesting
 on (right before prices change)}
@@ -19,21 +20,22 @@ on (right before prices change)}
 \item{last_trading_period}{(OPTIONAL) if supplied, only backtests
 up through \code{max_trading_period} (instead of through all
 available trading periods). This is the last price change we experience}
+
+\item{check_portfolio}{(OPTIONAL) defaults to \code{TRUE},
+if \code{TRUE} then asserts that each portfolio sums to 1 and is
+non-negative. Never checks
+the first portfolio, so be careful.
+If \code{FALSE}, performs no checks.}
 }
 \value{
-A data frame which has
-    @format{
-      @describe{
-         \item{trading_period}{The row index into \code{pf_select}'s
-             price_relatives, indicating the current trading period}
-         \item{cumulative_wealth}{The factor of wealth increase accumulated
-             up to this trading period}
-         \item{<Asset Names>}{Names matching the column names of
-             \code{pf_select@price_relatives} indicating the
-             portion of total wealth in that asset at the given trading
-             period}
-      }
-    }
+A matrix which has the same number of columns as
+    \code{strategy$price_relatives} and one more row.
+    Row \eqn{i} represents the portfolio before trading during
+    period \eqn{i} (Recall that trading during period \eqn{i}
+    happens before the price relatives for that period are known,
+    i.e. the trade occurs, then the price changes according to the
+    relatives). The column names of this matrix
+    match the column names of \code{strategy$price_relatives}.
 }
 \description{
 Run a portfolio selection strategy from the given trading

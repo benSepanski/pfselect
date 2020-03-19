@@ -93,11 +93,9 @@ validate_pfselectstrat <- function(x) {
   assert_that(values$ntrading_periods > 0)
   # make sure price relatives is a numeric matrix of non-negative
   # entries which is ntrading_periods x nassets
-  assert_that(is.matrix(values$price_relatives))
-  assert_that(is.numeric(values$price_relatives))
+  validate_nonnegative_mat(values$price_relatives)
   assert_that(are_equal(values$nassets, ncol(values$price_relatives)))
   assert_that(are_equal(values$ntrading_periods, nrow(values$price_relatives)))
-  assert_that(all(values$price_relatives >= 0))
   # transaction rate checks
   assert_that(is_scalar_double(values$transaction_rate))
   assert_that(values$transaction_rate >= 0 && values$transaction_rate <= 1)
@@ -200,8 +198,10 @@ next_portfolio.default <- function(strategy, trading_period, portfolio) {
 #'
 new_buyandhold <- function(price_relatives, transaction_rate,
                            ..., class = character()) {
-  new_pfselectstrat(price_relatives, transaction_rate,
-                    ..., class = c(class, "buyandhold"))
+  new_pfselectstrat(price_relatives,
+                    transaction_rate,
+                    ...,
+                    class = c(class, "buyandhold"))
 }
 
 #' @describeIn validate_pfselectstrat validates a buyandhold object
@@ -523,11 +523,11 @@ predict_priceLOAD <- function(prev_prices,
   if(var(prev_prices) > min_var) {  # avoid constant case
     # Note glmnet requires we have at least two variables but we only have
     # one, so we just duplicate the variable and sum them together
-    regularized_slope <- sum(as.numeric(
+    regularized_slope <- Matrix::colSums(
       glmnet(x = matrix(rep(1:length(prev_prices), 2), ncol = 2),
              y = prev_prices,
              alpha = 0,  # alpha = 0 -> ridge regression
-             lambda = regularization_factor)$beta))
+             lambda = regularization_factor)$beta)
   }
   # return max if has momentum
   if(regularized_slope > momentum_threshold) {
@@ -668,8 +668,152 @@ next_portfolio.exponential_gradient <- function(strategy,
   next_pf / sum(next_pf)  # return normalized portfolio
 }
 
+# universal_portfolio -----------------------------------------------------
 
+#' Makes a \code{universal_portfolio} class
+#'
+#' Returns an instance of a \code{universal_portfolio} class,
+#' which is a subclass of \code{\link[=new_pfselectstrat]{pfselectstrat}}.
+#' See Cover's paper "Universal Portfolios" (1991,
+#' \url{https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1467-9965.1991.tb00002.x}
+#' ) for a description.
+#' We estimate the universal portfolio using
+#' a sampling estimation method mentioned in Blum & Kalai's
+#' 1999 paper "Universal Portfolios With and Without Transaction Costs"
+#' (\url{https://link.springer.com/article/10.1023/A:1007530728748}),
+#' but is basically just random sampling of portfolios, then the
+#' average weighted by the produced cumulative wealth up to this point.
+#' However, we use Dirichlet(1/2,1/2,...,1/2) priors for the portfolios
+#' because they may have better performance according to
+#' Cover & Ordentlich (1996)
+#'
+#' initializes to uniform portfolio
+#'
+#' Validate using \code{\link{validate_universal_portfolio}()}.
+#'
+#' @note As a user, instantiate using the \code{\link{universal_portfolio}()}
+#'     function.
+#'
+#' @keywords internal
+#' @family universal_portfolio
+#'
+#' @inheritParams new_pfselectstrat
+#' @param nsamples Number of samples to perform at each day.
+#'     In general, this will be lower than theoretically necessary,
+#'     so expect a sub-optimal estimate
+#' @param consider_transaction_rate If \code{FALSE}, uses the original
+#'     1991 algorithm proposed by Cover, where the cumulative wealth
+#'     produced by a constantly rebalanced portfolio (CRP) is
+#'     computed without consider transaction costs. If \code{TRUE},
+#'     follows Blum & Kalai's 1991 paper and considers the transaction
+#'     costs.
+#' @return a \code{universal_portfolio} class
+#'
+new_universal_portfolio <- function(price_relatives,
+                                    transaction_rate,
+                                    nsamples,
+                                    consider_transaction_rate,
+                                    ...,
+                                    class = character()) {
+  new_pfselectstrat(price_relatives = price_relatives,
+                    transaction_rate = transaction_rate,
+                    nsamples = nsamples,
+                    consider_transaction_rate = consider_transaction_rate,
+                    ...,
+                    class = c(class, "universal_portfolio"))
+}
 
+#' validates a \code{\link[=new_universal_portfolio]{universal_portfolio}}
+#' class
+#'
+#' validates the class, making sure \code{nsamples} is a positive
+#' whole number and that consider_transaction_rate is a single boolean.
+#' Follows checks in \code{\link{validate_pfselectstrat}}
+#'
+#' @family universal_portfolio
+#' @param x the \code{\link[=new_universal_portfolio]{universal_portfolio}}
+#'     object to validate
+#' @return the object x
+#'
+#' @importFrom assertthat assert_that has_name
+#' @importFrom rlang is_scalar_logical
+#'
+validate_universal_portfolio <- function(x) {
+  validate_pfselectstrat(x)
+  values <- unclass(x)
+  assert_that(has_name(values, c("nsamples", "consider_transaction_rate")))
+  assert_that(is_whole_number(values$nsamples))
+  assert_that(values$nsamples > 0)
+  assert_that(is_scalar_logical(values$consider_transaction_rate))
+  x
+}
+
+#' Create a \code{universal_portfolio} class
+#'
+#' @family universal_portfolio
+#' @inherit new_universal_portfolio description return
+#' @inheritParams new_universal_portfolio
+#'
+#' @export
+#'
+universal_portfolio <- function(price_relatives,
+                                transaction_rate,
+                                nsamples,
+                                consider_transaction_rate) {
+  up <- new_universal_portfolio(price_relatives = price_relatives,
+                               transaction_rate = transaction_rate,
+                               nsamples = nsamples,
+                               consider_transaction_rate = consider_transaction_rate)
+  validate_universal_portfolio(up)
+}
+
+#' @importFrom assertthat are_equal
+#' @importFrom magrittr %>%
+#' @importFrom purrr map array_branch cross map2_dbl
+#' @export
+next_portfolio.universal_portfolio <- function(strategy, trading_period,
+                                               portfolio) {
+    if(trading_period < 1) {
+      stop("trading_period must be at least 1")
+    }
+    if(trading_period > strategy$ntrading_periods) {
+      stop("trading_period must be <= strategy$ntrading_periods")
+    }
+
+    # If in first trading period, just return uniform portfolio
+    if(trading_period == 1) {
+      return(first_portfolio.pfselectstrat(strategy, trading_period))
+    }
+
+    # otherwise we have some price relatives to work with.
+    rportfolios <- rdirichlet_onehalf(strategy$nsamples, strategy$nassets)
+    # compute wealth obtained up to this period by each sample
+    # CRP
+    if(!strategy$consider_transaction_rate ||
+       are_equal(strategy$transaction_rate, 0)) {
+      # nsamples x (trading_period - 1)
+      wealth_factors <- (
+        rportfolios %*% t(strategy$price_relatives[1:(trading_period-1),,
+                                                   drop=FALSE])
+      )
+      wealth <- apply(wealth_factors, 1L, prod)
+    }
+    else {
+      wealth <- list(rportfolios,
+                     strategy$price_relatives[1:(trading_period-1)]) %>%
+        map(array_branch, 1L) %>%
+        cross() %>%
+        map_dbl(~ wealth_increase_factor(price_relatives = .[[2]],
+                                         prev_portfolio = .[[1]],
+                                         portfolio = .[[1]],
+                                         tr = strategy$transaction_rate)) %>%
+        flatten_dbl() %>%
+        matrix(nrow = strategy$nsamples) %>%
+        apply(1L, function(row) reduce(row, `*`))
+    }
+    # return weighted average of CRP's by wealth return
+    apply(rportfolios, 2L, weighted.mean, w = wealth)
+}
 
 
 
