@@ -67,6 +67,43 @@ project_to_simplex <- function(v, r = 1) {
   pmax(v - theta, 0)
 }
 
+#' project to simplex in the A norm
+#'
+#' Find the closest vector on the simplex to v,
+#' where closest is in terms of the A norm
+#' \eqn{x^TAx}
+#' Runs projected gradient descent for maxit
+#' or until tolernace is reached
+#'
+#' @inheritParams project_to_simplex
+#' @param A The positive-definite matrix to use for a norm
+#'     (NOTE: no checks performed to verify)
+#' @param step_sizes (OPTIONAL) Projected gradient descent step size.
+#'     If a vector, tries each step size and picks closest.
+#'     Should be sorted greatest -> smallest (descending)
+#' @param tol (OPTIONAL) Min update before termination
+#' @param maxit (OPTIONAL) max number of iterations
+project_to_simplex_A_norm <- function(v, A, r = 1,
+                                      step_sizes = c(1,.5,.1,.05,.01,.005,.001),
+                                      maxit = 5,
+                                      tol = 1e-7) {
+  ata <- t(A) %*% A
+  atv <- t(A) %*% v
+  w <- project_to_simplex(v)
+  prev_w <- vector(mode = "numeric", length = length(w))
+  for(step_size in step_sizes) {
+    for(iter in 1:maxit){
+      prev_w <- w
+      w <- project_to_simplex(drop(w - step_size * (ata %*% w - atv)))
+      message(max(abs(w-prev_w)))
+      if(max(abs(w - prev_w)) < tol) {
+        break
+      }
+    }
+  }
+  w
+}
+
 #' Samples from Dirichlet(1/2,1/2,...,1/2)
 #'
 #' Returns independent samples from the Dirichlet(1/2,1/2,...,1/2)

@@ -815,7 +815,114 @@ next_portfolio.universal_portfolio <- function(strategy, trading_period,
     apply(rportfolios, 2L, weighted.mean, w = wealth)
 }
 
+# newton_step -------------------------------------------------------------
 
+#' Makes a \code{newton_step} class
+#'
+#' Returns an instance of a \code{newton_step} class,
+#' which is a subclass of \code{\link[=new_pfselectstrat]{pfselectstrat}}.
+#'
+#' This is implements the Online Newton Step
+#' (\url{https://www.researchgate.net/publication/221346006_Algorithms_for_portfolio_management_based_on_the_Newton_method})
+#' from Agarwal, Hazan, Kale, & Schapire's 2006 paper
+#' "Algorithms for portfolio management based on the Newton method".
+#' Each step solves a small linear set of equation then projects to
+#' the unit simplex in a matrix norm (estimated using projected
+#' gradient descent).
+#'
+#' The lhs and rhsof linear eqs build on each other, so have extra
+#' variables
+#'
+#' initializes to uniform portfolio
+#'
+#' Validate using \code{\link{validate_newton_step}()}.
+#'
+#' @note As a user, instantiate using the \code{\link{newton_step}()}
+#'     function.
+#'
+#' @note has private extra slots .bt and .At which hold the
+#'     \eqn{b_t} and \eqn{A_t} referenced in the paper
+#'     for each time period. These should NOT BE TOUCHED by the user
+#'
+#' @keywords internal
+#' @family newton_step
+#'
+#' @inheritParams new_pfselectstrat
+#' @param variability_parameter (OPTIONAL default 0)
+#'      \eqn{\alpha} in the referenced paper,
+#'     the believed minimum price relative for any stock.
+#' @return a \code{newton_step} class
+#'
+new_newton_step <- function(price_relatives,
+                            transaction_rate,
+                            variability_parameter,
+                            ...,
+                            class = character()) {
+  ntime_periods <- nrow(price_relatives)
+  nassets <- ncol(price_relatives)
+  new_pfselectstrat(price_relatives = price_relatives,
+                    transaction_rate = transaction_rate,
+                    variability_parameter = variability_parameter,
+                    .At = array(data = NA_real_,
+                                dim = c(ntime_periods, nassets, nassets)),
+                    .bt = matrix(data = NA_real_,
+                                 nrow = ntime_periods, ncol = nassets),
+                    ...,
+                    class = c(class, "newton_step"))
+}
+
+#' validates a \code{\link[=new_newton_step]{newton_step}}
+#' class
+#'
+#' validates the class, making sure \code{variability_parameter}
+#' is a non-negative number, and checks \code{.At} and \code{.bt}.
+#' Follows checks in \code{\link{validate_pfselectstrat}}
+#'
+#' @family newton_step
+#' @param x the \code{\link[=new_newton_step]{newton_step}}
+#'     object to validate
+#' @return the object x
+#'
+#' @importFrom assertthat assert_that has_name
+#' @importFrom rlang is_scalar_double
+#'
+validate_newton_step <- function(x) {
+  validate_pfselectstrat(x)
+  values <- unclass(x)
+  assert_that(has_name(values, c("variability_parameter", ".At", ".bt")))
+  assert_that(is_scalar_double(values$variability_parameter))
+  assert_that(values$variability_parameter >= 0)
+
+  assert_that(is.matrix(values$.bt))
+  assert_that(is.numeric(values$.bt))
+  assert_that(are_equal(nrow(values$.bt, values$ntime_periods)))
+  assert_that(are_equal(ncol(values$.bt, values$nassets)))
+  assert_that(is.array(values$.At))
+  assert_that(is.numeric(values$.bt))
+  assert_that(are_equal(dim(values$.At),
+                        c(values$ntime_periods,
+                          values$nassets,
+                          values$nassets)))
+
+  x
+}
+
+#' Create a \code{newton_step} class
+#'
+#' @family newton_step
+#' @inherit new_newton_step description return
+#' @inheritParams new_newton_step
+#'
+#' @export
+#'
+newton_step <- function(price_relatives,
+                        transaction_rate,
+                        variability_parameter) {
+  ns <- new_newton_step(price_relatives = price_relatives,
+                        transaction_rate = transaction_rate,
+                        variability_parameter = variability_parameter)
+  validate_newton_step(ns)
+}
 
 
 
