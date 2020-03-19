@@ -21,11 +21,13 @@
 #'    lost during each buy/sell}
 #' }
 #'
+#' The default first portfolio method for this class is a uniform
+#' distribution of wealth across all assets
+#'
 #' For validation of \code{pfselectstrat} objects, see
 #' \code{\link{validate_pfselectstrat}()}
 #'
-#' @note This is a class with no next_portfolio and no first_portfolio
-#'     method
+#' @note This is a class with no next_portfolio method
 #'
 #' @param price_relatives A T x n matrix of price relatives,
 #'     where each row represents a trading period and each column
@@ -107,6 +109,10 @@ validate_pfselectstrat <- function(x) {
 #'
 #' Returns the first portfolio for the given strategy.
 #' We assume trading is about to begin at the given trading period
+#' The default asserts that the object is of class
+#' \link[=new_pfselectstrat]{pfselectstrat}.
+#' The default for class \link[=new_pfselectstrat]{pfselectstrat} is
+#' a unifrom distribution of wealth across all assets.
 #'
 #' @param strategy the strategy to use when determining the first portfolio.
 #'     Should be of class \link[=new_pfselectstrat]{pfselectstrat}
@@ -130,10 +136,17 @@ first_portfolio.default <- function(strategy, trading_period) {
     glue::glue("No first_portfolio method found for class {class(strategy)}"))
 }
 
+#' @export
+first_portfolio.pfselectstrat <- function(strategy, trading_period) {
+  rep(1/strategy$nassets, strategy$nassets)
+}
+
 #' Get next portfolio from strategy
 #'
 #' Return the next portfolio for the given strategy.
 #' We assume trading is about to begin at the given trading period.
+#' The default asserts that the object is of class
+#' \link[=new_pfselectstrat]{pfselectstrat}.
 #'
 #' @param strategy the strategy to use when determining the first portfolio.
 #'     Should be of class \link[=new_pfselectstrat]{pfselectstrat}
@@ -171,12 +184,12 @@ next_portfolio.default <- function(strategy, trading_period, portfolio) {
 #'
 #' Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 #' relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
+#' This is a uniform buy and hold strategy if not subclassing
+#' (e.g. \link{new_best_stock})
 #'
 #' To validate the object use \code{\link{validate_buyandhold}}.
 #'
-#' @note An instance which is just of class \code{buyandhold} and on subclass
-#'     has no first_portfolio method
-#'
+#' @keywords internal
 #' @family buyandhold
 #'
 #' @inheritParams new_pfselectstrat
@@ -194,43 +207,25 @@ new_buyandhold <- function(price_relatives, transaction_rate,
 #' @describeIn validate_pfselectstrat validates a buyandhold object
 validate_buyandhold <- function(x) { validate_pfselectstrat(x) }
 
+#' Makes a new \code{buyandhold} strategy
+#'
+#' @inherit new_buyandhold title description return
+#' @inheritParams new_buyandhold
+#' @family buyandhold
+#'
+#' @seealso new_buyandhold
+#'
+#' @export
+buyandhold <- function(price_relatives, transaction_rate) {
+   bah <- new_buyandhold(price_relatives, transaction_rate)
+   validate_buyandhold(bah)
+}
+
 #' @export
 next_portfolio.buyandhold <- function(strategy, trading_period, portfolio) {
   portfolio
 }
 
-
-## uniform_bah =============================================================
-
-#' @describeIn new_buyandhold
-#'
-#' Starts with a uniform amount of wealth in each stock.
-new_uniform_bah <- function(price_relatives, transaction_rate,
-                            ..., class = character()) {
-  new_buyandhold(price_relatives = price_relatives,
-                 transaction_rate = transaction_rate,
-                 ...,
-                 class = c(class, "uniform_bah"))
-}
-
-#' Makes a new \code{uniform_bah} strategy
-#'
-#' @inherit new_uniform_bah title description return
-#' @inheritParams new_uniform_bah
-#' @family buyandhold
-#'
-#' @seealso new_uniform_bah
-#'
-#' @export
-uniform_bah <- function(price_relatives, transaction_rate) {
-   ubah <- new_uniform_bah(price_relatives, transaction_rate)
-   validate_buyandhold(ubah)
-}
-
-#' @export
-first_portfolio.uniform_bah <- function(strategy, trading_period) {
-  rep(1/strategy$nassets, strategy$nassets)
-}
 
 ## best_stock =============================================================
 
@@ -504,11 +499,6 @@ onlineLOAD <- function(price_relatives,
  validate_onlineLOAD(ld)
 }
 
-#' @export
-first_portfolio.onlineLOAD <- function(strategy, trading_period) {
-  first_portfolio.uniform_bah(strategy, trading_period)
-}
-
 #' predicts price according to LOAD strategy
 #'
 #' predicts next prices given previous prices according to LOAD
@@ -582,3 +572,112 @@ before the current trading_period."))
   }
   project_to_simplex(portfolio + gamma * mean_zero_pred_pr)
 }
+
+
+# exponential_gradient ----------------------------------------------------
+
+#' Makes a \code{exponential_gradient} class
+#'
+#' Returns an instance of a \code{exponential_gradient} class,
+#' which is a subclass of \code{\link[=new_pfselectstrat]{pfselectstrat}}.
+#' See this paper
+#' \url{http://rob.schapire.net/papers/HelmboldScSiWa98.pdf}
+#' ("Online Portfolio Selection Using Multiplicative Updates"
+#' by David P Helmholt, Robert E. Schapire and Yoram Singer,
+#' and Manfred K. Warmuth)
+#'
+#' has a multiplicative weight update rule, and initializes to
+#' uniform portfolio
+#'
+#' Validate using \code{\link{validate_expontial_gradient}()}.
+#'
+#' @note As a user, instantiate using the \code{\link{exponential_gradient}()}
+#'     function.
+#'
+#' @keywords internal
+#' @family exponential_gradient
+#'
+#' @inheritParams new_pfselectstrat
+#' @param \eqn{\eta} in the referenced paper, the learning rate
+#'    should be a positive scalar, the higher the learning rate
+#'    the more volatile the algorithm
+#' @return a \code{exponential_gradient} class
+#'
+new_exponential_gradient <- function(price_relatives,
+                                     transaction_rate,
+                                     learning_rate,
+                                     ...,
+                                     class = character()) {
+  new_pfselectstrat(price_relatives = price_relatives,
+                    transaction_rate = transaction_rate,
+                    learning_rate = learning_rate,
+                    ...,
+                    class = c(class, "exponential_gradient"))
+}
+
+#' validates a \code{\link[=new_exponential_gradient]{exponential_gradient}}
+#' class
+#'
+#' validates the class, making sure learning rate is positive
+#' and following checks in \code{\link{validate_pfselectstrat}}
+#'
+#' @family exponential_gradient
+#' @param x the \code{\link[=new_exponential_gradient]{exponential_gradient}}
+#'     object to validate
+#' @return the object x
+#'
+#' @importFrom assertthat assert_that has_name
+#' @importFrom rlang is_scalar_double
+#'
+validate_exponential_gradient <- function(x) {
+  validate_pfselectstrat(x)
+  values <- unclass(x)
+  assert_that(has_name(values, "learning_rate"))
+  assert_that(is_scalar_double(values$learning_rate))
+  assert_that(values$learning_rate > 0)
+  x
+}
+
+#' Create a \code{exponential_gradient} class
+#'
+#' @family exponential_gradient
+#' @inherit new_exponential_gradient description return
+#' @inheritParams new_exponential_gradient
+#'
+#' @export
+#'
+exponential_gradient <- function(price_relatives,
+                                 transaction_rate,
+                                 learning_rate) {
+  eg <- new_exponential_gradient(price_relatives = price_relatives,
+                                 transaction_rate = transaction_rate,
+                                 learning_rate = learning_rate)
+  validate_exponential_gradient(eg)
+}
+
+#' @export
+next_portfolio.exponential_gradient <- function(strategy,
+                                                trading_period,
+                                                portfolio) {
+  # next portfolio comes from multiplicative update rule
+  next_pf <- portfolio * exp(
+    strategy$learning_rate *
+      strategy$price_relatives[trading_period, ] /
+      as.numeric(portfolio %*% strategy$price_relatives[trading_period, ])
+  )
+  next_pf / sum(next_pf)  # return normalized portfolio
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

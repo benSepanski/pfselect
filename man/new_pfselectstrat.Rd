@@ -45,12 +45,14 @@ The class is functionally a list with named entries
    lost during each buy/sell}
 }
 
+The default first portfolio method for this class is a uniform
+distribution of wealth across all assets
+
 For validation of \code{pfselectstrat} objects, see
 \code{\link{validate_pfselectstrat}()}
 }
 \note{
-This is a class with no next_portfolio and no first_portfolio
-    method
+This is a class with no next_portfolio method
 }
 \seealso{
 Other pfselectstrat: 

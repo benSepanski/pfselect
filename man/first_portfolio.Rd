@@ -20,6 +20,10 @@ Should be of class \link[=new_pfselectstrat]{pfselectstrat}}
 \description{
 Returns the first portfolio for the given strategy.
 We assume trading is about to begin at the given trading period
+The default asserts that the object is of class
+\link[=new_pfselectstrat]{pfselectstrat}.
+The default for class \link[=new_pfselectstrat]{pfselectstrat} is
+a unifrom distribution of wealth across all assets.
 }
 \seealso{
 Other pfselectstrat: 

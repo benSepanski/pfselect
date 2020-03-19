@@ -2,13 +2,10 @@
 % Please edit documentation in R/pfselect_strategy.R
 \name{new_buyandhold}
 \alias{new_buyandhold}
-\alias{new_uniform_bah}
 \alias{new_best_stock}
 \title{makes a \code{\link[=new_buyandhold]{buyandhold}} strategy}
 \usage{
 new_buyandhold(price_relatives, transaction_rate, ..., class = character())
-
-new_uniform_bah(price_relatives, transaction_rate, ..., class = character())
 
 new_best_stock(
   price_relatives,
@@ -48,28 +45,25 @@ a new \code{buyandhold} object with the given price relatives
 \description{
 Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
+This is a uniform buy and hold strategy if not subclassing
+(e.g. \link{new_best_stock})
 }
 \details{
 To validate the object use \code{\link{validate_buyandhold}}.
 }
 \section{Functions}{
 \itemize{
-\item \code{new_uniform_bah}: Starts with a uniform amount of wealth in each stock.
-
 \item \code{new_best_stock}: Makes a \link[=new_buyandhold]{buyandhold} strategy which invests all its
 wealth in the best stock from the start of the trading period
 through the given last_trading_period
 }}
 
-\note{
-An instance which is just of class \code{buyandhold} and on subclass
-    has no first_portfolio method
-}
 \seealso{
 new_pfselectstrat
 
 Other buyandhold: 
 \code{\link{best_stock}()},
-\code{\link{uniform_bah}()}
+\code{\link{buyandhold}()}
 }
 \concept{buyandhold}
+\keyword{internal}

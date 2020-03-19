@@ -29,6 +29,8 @@ a new \code{buyandhold} object with the given price relatives
 \description{
 Makes a \code{\link[=new_buyandhold]{buyandhold}} strategy from the given price
 relatives, which is a subclass of \link[=new_pfselectstrat]{pfselectstrat}.
+This is a uniform buy and hold strategy if not subclassing
+(e.g. \link{new_best_stock})
 }
 \note{
 if last_trading_period is missing, it defaults
@@ -38,7 +40,7 @@ if last_trading_period is missing, it defaults
 new_best_stock
 
 Other buyandhold: 
-\code{\link{new_buyandhold}()},
-\code{\link{uniform_bah}()}
+\code{\link{buyandhold}()},
+\code{\link{new_buyandhold}()}
 }
 \concept{buyandhold}

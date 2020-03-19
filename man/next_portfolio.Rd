@@ -28,6 +28,8 @@ be starting backtesting in the middle of our data.}
 \description{
 Return the next portfolio for the given strategy.
 We assume trading is about to begin at the given trading period.
+The default asserts that the object is of class
+\link[=new_pfselectstrat]{pfselectstrat}.
 }
 \seealso{
 Other pfselectstrat: 
