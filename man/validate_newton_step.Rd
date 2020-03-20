@@ -15,8 +15,7 @@ object to validate}
 the object x
 }
 \description{
-validates the class, making sure \code{variability_parameter}
-is a non-negative number, and checks \code{.At} and \code{.bt}.
+validates the class,
 Follows checks in \code{\link{validate_pfselectstrat}}
 }
 \seealso{

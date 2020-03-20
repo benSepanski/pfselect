@@ -550,7 +550,9 @@ before the current trading_period."))
   }
   tp <- trading_period
   window <- (tp - strategy$time_window + 1):tp
-  # run ridge regression on each price
+  # run ridge regression on each price (recall prices are 1 index behind
+  #                                     trading period, so tihs does not
+  #                                     use future info)
   predicted_price <- strategy$prices[window, ] %>%
     array_branch(2L) %>%
     map2_dbl(strategy$price_means[tp, ], predict_priceLOAD,
@@ -655,16 +657,24 @@ exponential_gradient <- function(price_relatives,
   validate_exponential_gradient(eg)
 }
 
+#' @importFrom assertthat assert_that
 #' @export
 next_portfolio.exponential_gradient <- function(strategy,
                                                 trading_period,
                                                 portfolio) {
+  if(trading_period == 1) {
+    return(portfolio)
+  }
+  # we want portfolio with previous prices,
+  # portfolio = prev_portfolio * prev_price_relatives / (prev_pf %*% prev_pr)
+  # Our desired value in the exp is
+  # eta * prev_price_relatives / (prev_pf %*% prev_pr), so
+  # eta * portfolio / prev_portfolio
+  pr <- strategy$price_relatives[trading_period-1, ]
+  prev_portfolio <- price_adjusted_portfolio(1/pr, portfolio)
+
   # next portfolio comes from multiplicative update rule
-  next_pf <- portfolio * exp(
-    strategy$learning_rate *
-      strategy$price_relatives[trading_period, ] /
-      as.numeric(portfolio %*% strategy$price_relatives[trading_period, ])
-  )
+  next_pf <- portfolio * exp(strategy$learning_rate * portfolio / prev_portfolio)
   next_pf / sum(next_pf)  # return normalized portfolio
 }
 
@@ -773,46 +783,38 @@ universal_portfolio <- function(price_relatives,
 #' @export
 next_portfolio.universal_portfolio <- function(strategy, trading_period,
                                                portfolio) {
-    if(trading_period < 1) {
-      stop("trading_period must be at least 1")
-    }
-    if(trading_period > strategy$ntrading_periods) {
-      stop("trading_period must be <= strategy$ntrading_periods")
-    }
 
-    # If in first trading period, just return uniform portfolio
-    if(trading_period == 1) {
-      return(first_portfolio.pfselectstrat(strategy, trading_period))
-    }
+  if(trading_period == 1) {
+    return(portfolio)
+  }
 
-    # otherwise we have some price relatives to work with.
-    rportfolios <- rdirichlet_onehalf(strategy$nsamples, strategy$nassets)
-    # compute wealth obtained up to this period by each sample
-    # CRP
-    if(!strategy$consider_transaction_rate ||
-       are_equal(strategy$transaction_rate, 0)) {
-      # nsamples x (trading_period - 1)
-      wealth_factors <- (
-        rportfolios %*% t(strategy$price_relatives[1:(trading_period-1),,
-                                                   drop=FALSE])
-      )
-      wealth <- apply(wealth_factors, 1L, prod)
-    }
-    else {
-      wealth <- list(rportfolios,
-                     strategy$price_relatives[1:(trading_period-1)]) %>%
-        map(array_branch, 1L) %>%
-        cross() %>%
-        map_dbl(~ wealth_increase_factor(price_relatives = .[[2]],
-                                         prev_portfolio = .[[1]],
-                                         portfolio = .[[1]],
-                                         tr = strategy$transaction_rate)) %>%
-        flatten_dbl() %>%
-        matrix(nrow = strategy$nsamples) %>%
-        apply(1L, function(row) reduce(row, `*`))
-    }
-    # return weighted average of CRP's by wealth return
-    apply(rportfolios, 2L, weighted.mean, w = wealth)
+  rportfolios <- rdirichlet_onehalf(strategy$nsamples, strategy$nassets)
+  # compute wealth obtained up to this period by each sample
+  # CRP
+  if(!strategy$consider_transaction_rate ||
+     are_equal(strategy$transaction_rate, 0)) {
+    # nsamples x (trading_period - 1)
+    wealth_factors <- (
+      rportfolios %*% t(strategy$price_relatives[1:(trading_period-1),,
+                                                 drop=FALSE])
+    )
+    wealth <- apply(wealth_factors, 1L, prod)
+  }
+  else {
+    wealth <- list(rportfolios,
+                   strategy$price_relatives[1:(trading_period-1)]) %>%
+      map(array_branch, 1L) %>%
+      cross() %>%
+      map_dbl(~ wealth_increase_factor(price_relatives = .[[2]],
+                                       prev_portfolio = .[[1]],
+                                       portfolio = .[[1]],
+                                       tr = strategy$transaction_rate)) %>%
+      flatten_dbl() %>%
+      matrix(nrow = strategy$nsamples) %>%
+      apply(1L, function(row) reduce(row, `*`))
+  }
+  # return weighted average of CRP's by wealth return
+  apply(rportfolios, 2L, weighted.mean, w = wealth)
 }
 
 # newton_step -------------------------------------------------------------
@@ -830,8 +832,11 @@ next_portfolio.universal_portfolio <- function(strategy, trading_period,
 #' the unit simplex in a matrix norm (estimated using projected
 #' gradient descent).
 #'
-#' The lhs and rhsof linear eqs build on each other, so have extra
-#' variables
+#' The lhs and rhs of linear eqs build on each other, so have extra private
+#' variables.
+#' In the referenced paper, there are also parameters
+#' \eqn{\eta}, \eqn{\beta}, and \eqn{\delta}. We set \eqn{\delta=1/8},
+#' \eqn{\eta=0}, and \eqn{\beta=1}
 #'
 #' initializes to uniform portfolio
 #'
@@ -842,31 +847,27 @@ next_portfolio.universal_portfolio <- function(strategy, trading_period,
 #'
 #' @note has private extra slots .bt and .At which hold the
 #'     \eqn{b_t} and \eqn{A_t} referenced in the paper
-#'     for each time period. These should NOT BE TOUCHED by the user
+#'     for the most recent time
+#'     perioc. These should NOT BE TOUCHED by the user,
+#'     and values are \code{NA_real_} until computed.
 #'
 #' @keywords internal
 #' @family newton_step
 #'
 #' @inheritParams new_pfselectstrat
-#' @param variability_parameter (OPTIONAL default 0)
-#'      \eqn{\alpha} in the referenced paper,
-#'     the believed minimum price relative for any stock.
 #' @return a \code{newton_step} class
 #'
 new_newton_step <- function(price_relatives,
                             transaction_rate,
-                            variability_parameter,
                             ...,
                             class = character()) {
   ntime_periods <- nrow(price_relatives)
   nassets <- ncol(price_relatives)
+  # return created object
   new_pfselectstrat(price_relatives = price_relatives,
                     transaction_rate = transaction_rate,
-                    variability_parameter = variability_parameter,
-                    .At = array(data = NA_real_,
-                                dim = c(ntime_periods, nassets, nassets)),
-                    .bt = matrix(data = NA_real_,
-                                 nrow = ntime_periods, ncol = nassets),
+                    .At = diag(nassets),  # identity
+                    .bt = rep(0, nassets),
                     ...,
                     class = c(class, "newton_step"))
 }
@@ -874,8 +875,8 @@ new_newton_step <- function(price_relatives,
 #' validates a \code{\link[=new_newton_step]{newton_step}}
 #' class
 #'
-#' validates the class, making sure \code{variability_parameter}
-#' is a non-negative number, and checks \code{.At} and \code{.bt}.
+#' validates the class,
+#  checks \code{.At} and \code{.bt}.
 #' Follows checks in \code{\link{validate_pfselectstrat}}
 #'
 #' @family newton_step
@@ -889,20 +890,13 @@ new_newton_step <- function(price_relatives,
 validate_newton_step <- function(x) {
   validate_pfselectstrat(x)
   values <- unclass(x)
-  assert_that(has_name(values, c("variability_parameter", ".At", ".bt")))
-  assert_that(is_scalar_double(values$variability_parameter))
-  assert_that(values$variability_parameter >= 0)
+  assert_that(has_name(values, c(".At", ".bt")))
 
-  assert_that(is.matrix(values$.bt))
+  assert_that(is_numeric_vector(values$.bt))
+  assert_that(are_equal(length(values$.bt), values$nassets))
+  assert_that(is.matrix(values$.At))
   assert_that(is.numeric(values$.bt))
-  assert_that(are_equal(nrow(values$.bt, values$ntime_periods)))
-  assert_that(are_equal(ncol(values$.bt, values$nassets)))
-  assert_that(is.array(values$.At))
-  assert_that(is.numeric(values$.bt))
-  assert_that(are_equal(dim(values$.At),
-                        c(values$ntime_periods,
-                          values$nassets,
-                          values$nassets)))
+  assert_that(are_equal(dim(values$.At), c(values$nassets, values$nassets)))
 
   x
 }
@@ -916,12 +910,30 @@ validate_newton_step <- function(x) {
 #' @export
 #'
 newton_step <- function(price_relatives,
-                        transaction_rate,
-                        variability_parameter) {
+                        transaction_rate) {
   ns <- new_newton_step(price_relatives = price_relatives,
-                        transaction_rate = transaction_rate,
-                        variability_parameter = variability_parameter)
+                        transaction_rate = transaction_rate)
   validate_newton_step(ns)
+}
+
+#' @export
+next_portfolio.newton_step <- function(strategy,
+                                       trading_period,
+                                       portfolio) {
+  if(trading_period == 1) {
+    next_pf <- portfolio
+  }
+  else {
+    v <- drop(solve(strategy$.At, strategy$.bt))
+    next_pf <- project_to_simplex_A_norm(v / 8, strategy$.At)
+  }
+  # update .bt and .At for next time
+  pr <- strategy$price_relatives[trading_period, ]
+  bt_update <- 2 / drop(next_pf %*% pr) * pr
+  strategy$.bt <- strategy$.bt + bt_update
+  strategy$.At <- strategy$.At + outer(bt_update, bt_update)
+
+  next_pf
 }
 
 

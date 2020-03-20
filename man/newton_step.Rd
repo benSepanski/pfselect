@@ -4,7 +4,7 @@
 \alias{newton_step}
 \title{Create a \code{newton_step} class}
 \usage{
-newton_step(price_relatives, transaction_rate, variability_parameter)
+newton_step(price_relatives, transaction_rate)
 }
 \arguments{
 \item{price_relatives}{A T x n matrix of price relatives,
@@ -15,10 +15,6 @@ during the trading period.}
 
 \item{transaction_rate}{a transaction rate in \eqn{[0,1]},
 the percentage of each buy/sell lost to fees}
-
-\item{variability_parameter}{(OPTIONAL default 0)
- \eqn{\alpha} in the referenced paper,
-the believed minimum price relative for any stock.}
 }
 \value{
 a \code{newton_step} class

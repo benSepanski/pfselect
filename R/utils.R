@@ -95,7 +95,6 @@ project_to_simplex_A_norm <- function(v, A, r = 1,
     for(iter in 1:maxit){
       prev_w <- w
       w <- project_to_simplex(drop(w - step_size * (ata %*% w - atv)))
-      message(max(abs(w-prev_w)))
       if(max(abs(w - prev_w)) < tol) {
         break
       }

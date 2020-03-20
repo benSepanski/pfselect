@@ -70,8 +70,7 @@ backtest_portfolio_selector <- function(strategy,
     `colnames<-`(colnames(strategy$price_relatives))
 }
 
-
-#' Computes the cumulative increase in wealth
+#' Computes the daily increase in wealth
 #'
 #' Given price relatives and portfolios at each period,
 #' returns a vector containing the factor by
@@ -90,9 +89,9 @@ backtest_portfolio_selector <- function(strategy,
 #' @importFrom assertthat assert_that are_equal
 #' @importFrom magrittr %>%
 #' @export
-cumulative_wealth <- function(price_relatives,
-                              portfolios_before_trade,
-                              transaction_rate) {
+daily_return <- function(price_relatives,
+                         portfolios_before_trade,
+                         transaction_rate) {
   # Input validation
   validate_nonnegative_mat(price_relatives)
   portfolios_before_trade %>%
@@ -116,6 +115,19 @@ cumulative_wealth <- function(price_relatives,
        portfolios_before_trade[-1, ],
        price_relatives) %>%
     purrr::map(purrr::array_branch, 1L) %>%
-    purrr::pmap_dbl(get_wealth_increase) %>%
-    accumulate(`*`)
+    purrr::pmap_dbl(get_wealth_increase)
+}
+
+#' @describeIn daily_return
+#'
+#' Gives the factor by which initial wealth has increased at each trading
+#' period.
+#'
+#' @importFrom magrittr %>%
+#' @export
+cumulative_wealth <- function(price_relatives,
+                              portfolios_before_trade,
+                              transaction_rate) {
+  daily_return(price_relatives, portfolios_before_trade, transaction_rate) %>%
+    purrr::accumulate(`*`)
 }

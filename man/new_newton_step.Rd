@@ -4,13 +4,7 @@
 \alias{new_newton_step}
 \title{Makes a \code{newton_step} class}
 \usage{
-new_newton_step(
-  price_relatives,
-  transaction_rate,
-  variability_parameter,
-  ...,
-  class = character()
-)
+new_newton_step(price_relatives, transaction_rate, ..., class = character())
 }
 \arguments{
 \item{price_relatives}{A T x n matrix of price relatives,
@@ -21,10 +15,6 @@ during the trading period.}
 
 \item{transaction_rate}{a transaction rate in \eqn{[0,1]},
 the percentage of each buy/sell lost to fees}
-
-\item{variability_parameter}{(OPTIONAL default 0)
- \eqn{\alpha} in the referenced paper,
-the believed minimum price relative for any stock.}
 
 \item{...}{Arguments for subclassing, these are NOT set as attributes
 but instead are passed as arguments into the list which
@@ -52,8 +42,11 @@ Each step solves a small linear set of equation then projects to
 the unit simplex in a matrix norm (estimated using projected
 gradient descent).
 
-The lhs and rhsof linear eqs build on each other, so have extra
-variables
+The lhs and rhs of linear eqs build on each other, so have extra private
+variables.
+In the referenced paper, there are also parameters
+\eqn{\eta}, \eqn{\beta}, and \eqn{\delta}. We set \eqn{\delta=1/8},
+\eqn{\eta=0}, and \eqn{\beta=1}
 
 initializes to uniform portfolio
 
@@ -65,7 +58,9 @@ As a user, instantiate using the \code{\link{newton_step}()}
 
 has private extra slots .bt and .At which hold the
     \eqn{b_t} and \eqn{A_t} referenced in the paper
-    for each time period. These should NOT BE TOUCHED by the user
+    for the most recent time
+    perioc. These should NOT BE TOUCHED by the user,
+    and values are \code{NA_real_} until computed.
 }
 \seealso{
 Other newton_step: 
