@@ -148,7 +148,7 @@ rdirichlet_onehalf <- function(n, d) {
 #' must all have the same length, and there must be at least one.
 #'
 #' @param f the function to roll. \code{f} must return
-#'     some scalar value.
+#'     some double value.
 #' @param window_sizes the size of the windows in each parameter.
 #'     Must be at least one.
 #' @param fill the value to fill in entries when there isn't
@@ -160,32 +160,26 @@ rdirichlet_onehalf <- function(n, d) {
 #' @importFrom purrr map
 #' @importFrom magrittr %>%
 #'
-rollify <- function(f, window_sizes, fill = NA) {
+rollify_dbl <- function(f, window_sizes, fill = NA) {
   window_ranges <- purrr::map(window_sizes, ~1:.x)
 
-  get_window_at_offset <- function(offset) {
-    map(window_ranges, ~offset + 1 - .x)
-  }
-  get_windowed_l <- function(windows, l) {
-    l[1:length(windows)] <- map2(l[1:length(windows)], windows, `[`)
+  get_windowed_l <- function(offset, l) {
+    window <- map(window_ranges, ~offset + 1 - .x)
+    l[1:length(window)] <- map2(l[1:length(window)], window, `[`)
     l
   }
   lifted_f <- lift(f)
 
   function(...) {
     l <- list(...)
-    # assume at least one to roll over and all the same length
+    # assume all same length
     roll_length <- length(l[[1]])
-    rolled_result <- vector(mode = "logical", length = roll_length)
-    # fill in rolled results which don't fit in window
-    rolled_result[1:(max(window_sizes)-1)] <- fill
+    rolled_result <- rep(NA_real_, roll_length)
     # now roll results over windows
     roll_range <- max(window_sizes):roll_length
     rolled_result[roll_range] <- roll_range %>%
-      map(get_window_at_offset) %>%
       map(get_windowed_l, l) %>%
-      purrr::map(lifted_f) %>%
-      unlist()
+      purrr::map_dbl(lifted_f)
     rolled_result
   }
 }

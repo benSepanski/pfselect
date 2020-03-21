@@ -169,35 +169,20 @@ check_LOAD_args <- function(price_relatives,
 #'
 #' @note NO TYPE CHECKING IS PERFORMED... be careful
 #'
-#' @param prev_prices a numeric vector of previous prices
-#' @param historic_mean The historic mean of the prices
-#' @param min_var (OPTIONAL) minimum variance to be determined non-constant
-#' @inheritParams backtest_LOAD
-#'
+#' @inheritParams predict_momentum_LOAD
 #' @return the predicted next price
-#'
-#' @importFrom glmnet glmnet
 #'
 predict_price_LOAD <- function(prev_prices,
                                historic_mean,
                                regularization_factor,
-                               momentum_threshold,
-                               min_var = .Machine$double.eps ^ 0.25) {
-  regularized_slope <- 0
-  if(var(prev_prices) > min_var) {  # avoid constant case
-    # Note glmnet requires we have at least two variables but we only have
-    # one, so we just duplicate the variable and sum them together
-    regularized_slope <- Matrix::colSums(
-      glmnet(x = matrix(rep(1:length(prev_prices), 2), ncol = 2),
-             y = prev_prices,
-             alpha = 0,  # alpha = 0 -> ridge regression
-             lambda = regularization_factor)$beta)
-  }
-  # return max if has momentum
-  if(regularized_slope > momentum_threshold) {
+                               momentum_threshold) {
+  predicted_momentum <- predict_momentum_LOAD(prev_prices,
+                                              historic_mean,
+                                              regularization_factor,
+                                              momentum_threshold)
+  if(predicted_momentum > 0) {
     return( max(prev_prices) )
   }
-  # otherwise mean
   historic_mean
 }
 
@@ -281,15 +266,18 @@ backtest_LOAD <- function(price_relatives,
   ntrading_periods <- nrow(price_relatives)
   nassets <- ncol(price_relatives)
 
-  pred_prices <- list(head(price_relatives, -1L), price_means) %>%
+  # don't need last price relative bc done trading,
+  # once can see first price relative can see second price mean,
+  # and don't need last price mean bc done trading
+  pred_prices <- list(head(price_relatives, -1L), head(price_means[-1,], -1L)) %>%
     purrr::map(purrr::array_branch, 2L) %>%
-    purrr::pmap(rollify(predict_price_LOAD,window_sizes = c(time_window, 1)),
+    purrr::pmap(rollify_dbl(predict_price_LOAD,window_sizes = c(time_window, 1)),
                regularization_factor = regularization_factor,
                momentum_threshold = momentum_threshold) %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = nassets)
   # strip first (time_window-1) many rows
-  pred_prices <- tail(price_relatives, -(time_window-1))
+  pred_prices <- tail(pred_prices, -(time_window-1))
 
   # predicted price relatives
   pred_pr <- pred_prices / prices[time_window:(ntrading_periods-1), ]
