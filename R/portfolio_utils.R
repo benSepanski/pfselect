@@ -18,6 +18,29 @@ validate_portfolio <- function(portfolio, nassets) {
   portfolio
 }
 
+#' validate and return a matrix of portfolios
+#'
+#' @param portfolio_matrix a matrix where each row is a portfolio
+#' @param ntrading_periods the number of trading periods, \code{portfolio_matrix}
+#'     this many rows
+#' @param nassets the number of assets, should be the number of columns
+#'     in \code{portfolio_matrix}
+#' @return portfolio_matrix
+#'
+#' @importFrom assertthat assert_that are_equal
+#'
+validate_portfolio_matrix <- function(portfolio_matrix,
+                                      ntrading_periods,
+                                      nassets) {
+  assert_that(are_equal(nrow(portfolio_matrix), ntrading_periods))
+  assert_that(are_equal(ncol(portfolio_matrix), nassets))
+  for(row in 1:nrow(portfolio_matrix)) {
+    validate_portfolio(portfolio_matrix[row, ], nassets)
+  }
+  portfolio_matrix
+}
+
+
 #' Returns a uniform portfolio
 #'
 #' Returns a uniform portfolio over the given number of assets
