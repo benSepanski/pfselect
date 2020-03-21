@@ -18,6 +18,17 @@ validate_portfolio <- function(portfolio, nassets) {
   portfolio
 }
 
+#' Returns a uniform portfolio
+#'
+#' Returns a uniform portfolio over the given number of assets
+#'
+#' @param nassets the number of assets
+#' @return a numeric vector of length \code{nassets}, each
+#'     with value \code{1/nassets}.
+uniform_portfolio <- function(nassets) {
+  rep(1/nassets, nassets)
+}
+
 #' get prices from price relatives
 #'
 #' Given price_relatives and the initial prices, get the
@@ -83,6 +94,9 @@ historical_price_means <- function(prices, decay_factor = 0.5) {
 #' return a new vector reflecting the portion of total wealth
 #' in each asset under the new prices.
 #'
+#' @param portfolio A vector of non-negative numbers which sum to 1,
+#'     the \eqn{i}th entry representing the portion of total wealth
+#'     in asset \eqn{i}.
 #' @param price_relatives A vector whose \eqn{i}th entry
 #'     is the ratio of the \eqn{i}th asset's new price
 #'     to its old price. More precisely, if asset \eqn{i}
@@ -90,16 +104,13 @@ historical_price_means <- function(prices, decay_factor = 0.5) {
 #'     according to \code{portfolio}, but now has price \eqn{p_t},
 #'     the \eqn{i}th entry of \code{price_relatives} is
 #'     \eqn{\frac{p_t}{p_{t-1}}}.
-#' @param portfolio A vector of non-negative numbers which sum to 1,
-#'     the \eqn{i}th entry representing the portion of total wealth
-#'     in asset \eqn{i}.
 #'
 #' @return A numeric vector whose \eqn{i}th entry is the portion of total
  #'      wealth in asset \eqn{i} (according to the new prices).
  #'
  #' @importFrom assertthat assert_that are_equal
  #'
-price_adjusted_portfolio <- function(price_relatives, portfolio) {
+price_adjusted_portfolio <- function(portfolio, price_relatives) {
   # some type checks
   assert_that(is_numeric_vector(price_relatives))
   assert_that(is_numeric_vector(portfolio))

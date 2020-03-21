@@ -4,9 +4,13 @@
 \alias{price_adjusted_portfolio}
 \title{renormalizes portfolio to show total portion of wealth in each asset}
 \usage{
-price_adjusted_portfolio(price_relatives, portfolio)
+price_adjusted_portfolio(portfolio, price_relatives)
 }
 \arguments{
+\item{portfolio}{A vector of non-negative numbers which sum to 1,
+the \eqn{i}th entry representing the portion of total wealth
+in asset \eqn{i}.}
+
 \item{price_relatives}{A vector whose \eqn{i}th entry
 is the ratio of the \eqn{i}th asset's new price
 to its old price. More precisely, if asset \eqn{i}
@@ -14,10 +18,6 @@ had price \eqn{p_{t-1}} when wealth was distributed
 according to \code{portfolio}, but now has price \eqn{p_t},
 the \eqn{i}th entry of \code{price_relatives} is
 \eqn{\frac{p_t}{p_{t-1}}}.}
-
-\item{portfolio}{A vector of non-negative numbers which sum to 1,
-the \eqn{i}th entry representing the portion of total wealth
-in asset \eqn{i}.}
 }
 \value{
 A numeric vector whose \eqn{i}th entry is the portion of total

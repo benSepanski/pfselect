@@ -26,6 +26,15 @@ is_numeric_vector <- function(x) {
   is.numeric(x) && is_vector(x)
 }
 
+#' checks if x is a numeric matrix
+#'
+#' @param x the object to check
+#' @return TRUE iff x is a numeric matrix
+#'
+is_numeric_matrix <- function(x) {
+  is.numeric(x) && is.matrix(x)
+}
+
 #' Validates and returns a numeric matrix
 #'
 #' Asserts that \code{mat} is a numeric matrix
