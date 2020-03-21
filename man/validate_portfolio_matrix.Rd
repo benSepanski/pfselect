@@ -7,10 +7,10 @@
 validate_portfolio_matrix(portfolio_matrix, ntrading_periods, nassets)
 }
 \arguments{
-\item{portfolio_matrix}{a matrix where each row is a portfolios}
+\item{portfolio_matrix}{a matrix where each row is a portfolio}
 
 \item{ntrading_periods}{the number of trading periods, \code{portfolio_matrix}
-should have one more than this many rows}
+this many rows}
 
 \item{nassets}{the number of assets, should be the number of columns
 in \code{portfolio_matrix}}

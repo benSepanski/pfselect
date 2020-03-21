@@ -156,15 +156,12 @@ price_adjusted_portfolio <- function(portfolio, price_relatives) {
 #'
 #' @importFrom assertthat assert_that are_equal
 #'
-wealth_increase_factor <- function(price_relatives, tr,
-                                   prev_portfolio, portfolio,
-                                   tol = 1e-10, maxit = 15) {
-  # make sure we have vectors
-  assert_that(is_numeric_vector(price_relatives))
-  assert_that(is_numeric_vector(portfolio))
-  assert_that(is_numeric_vector(prev_portfolio))
-  assert_that(are_equal(length(price_relatives), length(portfolio)))
-  assert_that(are_equal(length(prev_portfolio), length(portfolio)))
+get_return_from_trade <- function(price_relatives, tr,
+                                  prev_portfolio, portfolio,
+                                  tol = 1e-10, maxit = 15) {
+  # make sure we have portfolios
+  validate_portfolio(prev_portfolio, length(price_relatives))
+  validate_portfolio(portfolio, length(price_relatives))
 
   # To move from portfolio b -> (b+a) with prices p and transaction
   # rate r and total wealth S, we have

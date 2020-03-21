@@ -2,7 +2,7 @@
 % Please edit documentation in R/backtest_strategy.R
 \name{predict_price_LOAD}
 \alias{predict_price_LOAD}
-\title{predicts price according to LOAD strategy}
+\title{predicts price for asset according to LOAD strategy}
 \usage{
 predict_price_LOAD(
   prev_prices,
@@ -32,7 +32,8 @@ stock has momentum. This must be greater than 0.}
 the predicted next price
 }
 \description{
-predicts next prices given previous prices according to LOAD
+predicts next price for one asset
+ given previous prices according to LOAD
 strategy (see paper mentioned in description of
 \code{\link{backtest_LOAD}})
 }

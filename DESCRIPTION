@@ -18,5 +18,6 @@ Imports:
     stringr,
     dplyr,
     rvest,
-    httr
+    httr,
+    glmnet
 RoxygenNote: 7.1.0

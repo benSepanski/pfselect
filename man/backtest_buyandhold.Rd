@@ -23,9 +23,10 @@ spent on broker fees}
     be a portfolio for the assets in \code{price_relatives}.
     This is the portfolio before the first trading period.
 
- @return a matrix with the same number of columns as
-     \code{price_relatives} but one more row, row \eqn{i}
-     is the portfolio before trading begins during period \eqn{i}.}
+ @return a matrix with the same number of rows and columns as
+     \code{price_relatives}, row \eqn{i}
+     is the portfolio after a trade during period \eqn{i}, i.e.
+     right before the \eqn{i}th price relatives change the prices.}
 }
 \description{
 backtest a buy and hold strategy
