@@ -281,21 +281,15 @@ backtest_LOAD <- function(price_relatives,
   ntrading_periods <- nrow(price_relatives)
   nassets <- ncol(price_relatives)
 
-  # compute predicted prices for next period at cur_tp: the given the period
-  get_predicted_prices <- function(cur_tp) {
-    list(price_relatives[(cur_tp - time_window+1):cur_tp, ],
-         price_means[cur_tp,, drop = FALSE]) %>%
-      purrr::map(purrr::array_branch, 2L) %>%
-      purrr::pmap(
-        ~predict_price_LOAD(.x, .y,
-                            regularization_factor = regularization_factor,
-                            momentum_threshold = momentum_threshold)) %>%
-      purrr::flatten_dbl()
-  }
-  pred_prices <- time_window:(ntrading_periods-1) %>%
-    purrr::map(get_predicted_prices) %>%
+  pred_prices <- list(head(price_relatives, -1L), price_means) %>%
+    purrr::map(purrr::array_branch, 2L) %>%
+    purrr::pmap(rollify(predict_price_LOAD,window_sizes = c(time_window, 1)),
+               regularization_factor = regularization_factor,
+               momentum_threshold = momentum_threshold) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = nassets, byrow = TRUE)
+    matrix(ncol = nassets)
+  # strip first (time_window-1) many rows
+  pred_prices <- tail(price_relatives, -(time_window-1))
 
   # predicted price relatives
   pred_pr <- pred_prices / prices[time_window:(ntrading_periods-1), ]

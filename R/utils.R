@@ -133,3 +133,72 @@ rdirichlet_onehalf <- function(n, d) {
         STATS = rowSums(samples),
         FUN = "/")
 }
+
+#' rollify f to operate over windows
+#'
+#' Returns a function which rolls \code{f} over windows.
+#' \code{window_sizes} is a vector,
+#' \code{window_sizes[i]} should be the window size for the \eqn{i}th
+#' positional argument of \code{f}. This function can only
+#' roll positional arguments.
+#'
+#' For example, if we have f(x,y,z) where x, y, and z are some windows,
+#' and we want to roll f across vectors (xvec, yvec, zvec), we
+#' would call rollify(f)(xvec, yvec, zvec). These vecs
+#' must all have the same length, and there must be at least one.
+#'
+#' @param f the function to roll. \code{f} must return
+#'     some scalar value.
+#' @param window_sizes the size of the windows in each parameter.
+#'     Must be at least one.
+#' @param fill the value to fill in entries when there isn't
+#'     enough data for a given window size
+#'
+#' @return a function which rolls \code{f} over windows of the
+#'     given sizes.
+#'
+#' @importFrom purrr map
+#' @importFrom magrittr %>%
+#'
+rollify <- function(f, window_sizes, fill = NA) {
+  window_ranges <- purrr::map(window_sizes, ~1:.x)
+
+  get_window_at_offset <- function(offset) {
+    map(window_ranges, ~offset + 1 - .x)
+  }
+  get_windowed_l <- function(windows, l) {
+    l[1:length(windows)] <- map2(l[1:length(windows)], windows, `[`)
+    l
+  }
+  lifted_f <- lift(f)
+
+  function(...) {
+    l <- list(...)
+    # assume at least one to roll over and all the same length
+    roll_length <- length(l[[1]])
+    rolled_result <- vector(mode = "logical", length = roll_length)
+    # fill in rolled results which don't fit in window
+    rolled_result[1:(max(window_sizes)-1)] <- fill
+    # now roll results over windows
+    roll_range <- max(window_sizes):roll_length
+    rolled_result[roll_range] <- roll_range %>%
+      map(get_window_at_offset) %>%
+      map(get_windowed_l, l) %>%
+      purrr::map(lifted_f) %>%
+      unlist()
+    rolled_result
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
