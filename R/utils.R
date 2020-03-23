@@ -209,15 +209,24 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
 #' @param weight_elimination \eqn{\eta} in the description
 #' @param weight_decay \eqn{\lambda} in the description
 #' @param maxit the maximum number of iteratoins
+#' @param initial_weights the initial weights. If missing, uses linear
+#'     regression
 #'
 #' @return perceptron weights
+#'
+#' @importFrom assertthat assert_that are_equal
 #'
 #' @export
 #'
 regularized_pocket <- function(x, y,
                                weight_elimination,
                                weight_decay,
-                               maxit) {
+                               maxit,
+                               initial_weights) {
+  assert_that(is_numeric_matrix(x))
+  assert_that(is_numeric_vector(y))
+  assert_that(are_equal(nrow(x), length(y)))
+
   n <- length(y)
   weight_elimnation <- weight_elimination/n
   weight_decay <- weight_decay/n
@@ -230,7 +239,10 @@ regularized_pocket <- function(x, y,
     weights + y[row] * x[row, ]
   }
 
-  weights <- lm(y~x)
+  if(missing(initial_weights)) {
+    initial_weights <- lm(y~x)
+  }
+  weights <- initial_weights
   best_err <- 1
   for(i in 1:maxit) {
     misclassified_indices <- which(sign(drop(x %*% weights)) != y)
@@ -247,6 +259,64 @@ regularized_pocket <- function(x, y,
 }
 
 
+#' Uses nested cross-validation to pick parameters to \code{\link{regularized_pocket}}
+#'
+#' Tests all combinations of the weight elimination and weight decay
+#' variables using nested cross validation (i.e. the nth row/entry of x/y
+#' depends on the (n-1)th) and returns each pair with its associated
+#' error
+#'
+#' @inheritParams regularized_pocket
+#' @param weight_elimination a vector of weight elimination constants to try
+#' @param weight_decay a vector of weight decay constants to try
+#' @param nfolds Number of folds, if missing defaults to folds of size 1
+#' @param maxit_per_fold maxits per fold
+#'
+#' @return a data frame with each combination of weight elimination
+#'     and weight decay, as well as the recorded cv error
+#'
+#' @export
+#'
+nested_cv_regularized_pocket <- function(x, y,
+                                         weight_elimination,
+                                         weight_decay,
+                                         nfolds,
+                                         maxit_per_fold) {
+  assert_that(nfolds > 1)
+  if(missing(nfolds)) {
+    nfolds = length(y) - 1
+  }
+  # holds max index of each fold
+  index_folds <- split(1:length(y),
+                       cut(1:length(y), nfolds, labels = FALSE)) %>%
+    purrr::map_int(max)
+
+  get_cv_err <- function(elim, dec) {
+    weights <- regularized_pocket(x[1:max_ind[1],], y[1:max_ind[1]],
+                                  weight_elimination = elim,
+                                  weight_decay = dec,
+                                  maxit = maxit_per_fold)
+    err_range <- (max_ind[1]+1):max_ind[2]
+    err <- mean(sign(drop(x[err_range, ] %*% weights)) != y[err_range])
+    for(i in 2:(nfolds-1)) {
+      max_ind <- index_folds[i]
+      weights <- regularized_pocket(x[1:max_ind,], y[1:max_ind],
+                                    weight_elimination = elim,
+                                    weight_decay = dec,
+                                    maxit = maxit_per_fold,
+                                    init_weights = weights)
+      err_range <- (max_ind[i]+1):max_ind[i+1]
+      err <- err + mean(sign(drop(x[err_range,] %*% weights)) != y[err_range])
+    }
+    err / (nfolds-1)
+  }
+
+  candidate_reg <- cross2(weight_elimination, weight_decay) %>%
+    purrr::transpose() %>%
+    purrr::pmap_dfr(~list("weight_elimination" = .x,
+                          "weight_decay" = .y,
+                          "cv_err" = get_cv_err(.x,.y)))
+}
 
 
 

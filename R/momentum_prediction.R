@@ -183,6 +183,35 @@ predict_momentum_LOAD <- function(decay_factor,
 }
 
 
+# Regularized Pocket ------------------------------------------------------
+
+#' Predict the momentum using a cross-validated regularized pocket algorithm
+#'
+#' Cross validates over the first
+#' num_train parameters from the given weight elimination parameters
+#' and weight decay parameters over time. Then predicts
+#' the remaining momenta.
+#'
+#' @inheritParams predict_momentum_LOAD
+#' @param price_means the historic mean of the prices (exponentially
+#'      weighted average of past prices)
+#' @inheritParams nested_cv_regularized_pocket
+#' @export
+predict_momentum_reg_pocket <- function(prices,
+                                        price_means,
+                                        weight_elimination,
+                                        weight_decay,
+                                        nfolds,
+                                        maxit_per_fold,
+                                        num_train) {
+  cv_errs <- nested_cv_regularized_pocket(x[1:num_train, ],
+                                          y[1:num_train],
+                                          weight_elimination,
+                                          weight_decay,
+                                          nfolds,
+                                          maxit_per_fold)
+}
+
 
 
 
