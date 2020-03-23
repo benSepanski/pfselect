@@ -4,7 +4,12 @@
 \alias{evaluate_momentum}
 \title{Evaluate momentum of the price}
 \usage{
-evaluate_momentum(previous_prices, price, historic_price_mean)
+evaluate_momentum(
+  previous_prices,
+  price,
+  historic_price_mean,
+  consider_negative_momentum = TRUE
+)
 }
 \arguments{
 \item{price}{price of asset in period \eqn{t+1}}
@@ -13,6 +18,10 @@ evaluate_momentum(previous_prices, price, historic_price_mean)
 For some \eqn{\alpha\in[0,1]}, the historic price mean
 is \eqn{MA_t = \alpha p_t + (1-\alpha) MA_{t-1}}, with
 \eqn{MA_1 = p_1}.}
+
+\item{consider_negative_momentum}{If \code{FALSE}, then only
+does not consider -1 as an option for momentum, i.e.
+only checks historic mean and max of previous prices}
 
 \item{previous_price}{prices of asset in period \eqn{t-\tau+1,...t}}
 }

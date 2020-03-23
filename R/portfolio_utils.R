@@ -71,7 +71,9 @@ uniform_portfolio <- function(nassets) {
 #' @importFrom magrittr %>%
 #' @importFrom assertthat assert_that are_equal
 #'
-prices_from_relatives <- function(price_relatives, initial_prices) {
+#' @export
+#'
+compute_prices_from_relatives <- function(price_relatives, initial_prices) {
   # type and dimension checks
   assert_that(is_numeric_vector(initial_prices))
   assert_that(is.numeric(price_relatives))
@@ -81,7 +83,7 @@ prices_from_relatives <- function(price_relatives, initial_prices) {
   price_relatives %>%
     purrr::array_branch(2L) %>%
     purrr::map2(initial_prices, ~c(.y, .x)) %>%
-    purrr::map(purrr::accumulate, `*`) %>%
+    purrr::map(cumprod) %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = ncol(price_relatives))
 }
@@ -93,15 +95,19 @@ prices_from_relatives <- function(price_relatives, initial_prices) {
 #' \deqn{MA_t = decay_factor \cdot p_t + (1-decay_factor) \cdot MA_{t-1}}
 #' And \eqn{MA_1 = p_1}.
 #'
+#' @note no input validation is performed
+#'
 #'  @param prices A matrix of prices, each row is a time period
 #'      and each column an asset
 #'  @param decay_factor the decay factor for the mean (see description)
 #'  @return A matrix with the same dimension as \code{prices}
 #'      with historical price means as the entries
 #'
-#'  @importFrom magrittr %>%
+#' @importFrom magrittr %>%
 #'
-historical_price_means <- function(prices, decay_factor = 0.5) {
+#' @export
+#'
+compute_historical_price_means <- function(prices, decay_factor = 0.5) {
   prices %>%
     purrr::array_branch(2L) %>%
     purrr::map(purrr::accumulate, ~decay_factor*.y + (1-decay_factor)*.x) %>%

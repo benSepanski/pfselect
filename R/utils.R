@@ -134,6 +134,7 @@ rdirichlet_onehalf <- function(n, d) {
         FUN = "/")
 }
 
+
 #' rollify f to operate over windows
 #'
 #' Returns a function which rolls \code{f} over windows.
@@ -161,14 +162,13 @@ rdirichlet_onehalf <- function(n, d) {
 #' @importFrom magrittr %>%
 #'
 rollify_dbl <- function(f, window_sizes, fill = NA) {
-  window_ranges <- purrr::map(window_sizes, ~1:.x)
 
   get_windowed_l <- function(offset, l) {
-    window <- map(window_ranges, ~offset + 1 - .x)
+    window <- map(window_sizes,
+                  ~seq.int(from = offset, by = -1, length.out = .x))
     l[1:length(window)] <- map2(l[1:length(window)], window, `[`)
     l
   }
-  lifted_f <- lift(f)
 
   function(...) {
     l <- list(...)
@@ -179,11 +179,72 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
     roll_range <- max(window_sizes):roll_length
     rolled_result[roll_range] <- roll_range %>%
       map(get_windowed_l, l) %>%
-      purrr::map_dbl(lifted_f)
+      purrr::map_dbl(do.call, what = f)
     rolled_result
   }
 }
 
+
+#' Perform regularized pocket algorithm
+#'
+#' Performs the Perceptron Learning Algorithm with two regularization
+#' constants.
+#'
+#' \deqn{
+#'     [[sign(w^Tx_n) \neq y_n]]
+#'     + \frac{\eta}{2n}\sum_{i=1}^d\frac{w_i^2}{1+w_i^2}
+#'     + \frac{\lambda}{2n} \sum_{i=1}^d w_i^2
+#' }
+#' We treat the PLA update as a ``derivative" of the first component.
+#' So, our update in the \eqn{i}th component will be
+#' \deqn{
+#'     PLA_update
+#'     - \frac{\eta}{n}\frac{w_i}{(1+w_i^2)^2}
+#'     - \frac{\lambda}{n} w_i
+#' }
+#'
+#' @param x A numeric matrix with \eqn{n} rows. Should NOT include
+#'     a column of all 1s for bias weight.
+#' @param y a numeric vector with \eqn{n} columns
+#' @param weight_elimination \eqn{\eta} in the description
+#' @param weight_decay \eqn{\lambda} in the description
+#' @param maxit the maximum number of iteratoins
+#'
+#' @return perceptron weights
+#'
+#' @export
+#'
+regularized_pocket <- function(x, y,
+                               weight_elimination,
+                               weight_decay,
+                               maxit) {
+  n <- length(y)
+  weight_elimnation <- weight_elimination/n
+  weight_decay <- weight_decay/n
+  update_weights <- function(prev_weights, misclassified_indices) {
+    reg_update <- -weight_elimination * weights[-1] / (1+weights[-1]^2)^2
+    reg_update <- update - weight_decay * weights[-1]
+    weights[-1] <- weights[-1] + reg_update
+
+    row <- misclassified_indices[sample.int(length(misclassified_indices), 1)]
+    weights + y[row] * x[row, ]
+  }
+
+  weights <- lm(y~x)
+  best_err <- 1
+  for(i in 1:maxit) {
+    misclassified_indices <- which(sign(drop(x %*% weights)) != y)
+    if(length(misclassified_indices) == 0) {
+      break
+    }
+    next_weights <- update_weights(weights)
+    err <- mean(sign(drop(x %*% next_weights)) != y)
+    if(err < best_err) {
+      weights <- next_weights
+    }
+  }
+  weights
+}
 
 
 

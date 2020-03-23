@@ -119,14 +119,14 @@ backtest_best_stock <- function(price_relatives, transaction_rate) {
 #' @importFrom assertthat assert_that are_equal
 #' @importFrom rlang is_scalar_double
 check_LOAD_args <- function(price_relatives,
-                           transaction_rate,
-                           decay_factor,
-                           regularization_factor,
-                           time_window,
-                           momentum_threshold,
-                           wealth_factor_threshold,
-                           prices,
-                           price_means) {
+                            transaction_rate,
+                            decay_factor,
+                            regularization_factor,
+                            time_window,
+                            momentum_threshold,
+                            wealth_factor_threshold,
+                            prices,
+                            price_means) {
   # type and scalar checks
   assert_that(is_scalar_double(decay_factor))
   assert_that(is_scalar_double(regularization_factor))
@@ -152,10 +152,10 @@ check_LOAD_args <- function(price_relatives,
   assert_that(are_equal(nrow(price_means), ntrading_periods + 1))
   # Now check prices match price relatives and price_means match
   # decay_factor
-  expected_p <- prices_from_relatives(price_relatives,
-                                      prices[1,])
+  expected_p <- compute_prices_from_relatives(price_relatives, prices[1,])
   assert_that(are_equal(expected_p, prices))
-  expected_means <- historical_price_means(prices, decay_factor = decay_factor)
+  expected_means <- compute_historical_price_means(prices,
+                                                   decay_factor = decay_factor)
   assert_that(are_equal(expected_means, price_means))
 }
 
@@ -169,18 +169,18 @@ check_LOAD_args <- function(price_relatives,
 #'
 #' @note NO TYPE CHECKING IS PERFORMED... be careful
 #'
-#' @inheritParams predict_momentum_LOAD
+#' @inheritParams predict_price_momentum_LOAD
+#' @param historic_mean The historic mean of the prices
 #' @return the predicted next price
 #'
 predict_price_LOAD <- function(prev_prices,
                                historic_mean,
                                regularization_factor,
                                momentum_threshold) {
-  predicted_momentum <- predict_momentum_LOAD(prev_prices,
-                                              historic_mean,
-                                              regularization_factor,
-                                              momentum_threshold)
-  if(predicted_momentum > 0) {
+  predicted_momentum <- predict_price_momentum_LOAD(prev_prices,
+                                                    regularization_factor,
+                                                    momentum_threshold)
+  if(predicted_momentum == 1) {
     return( max(prev_prices) )
   }
   historic_mean
@@ -246,12 +246,12 @@ backtest_LOAD <- function(price_relatives,
   check_strategy_args(price_relatives, transaction_rate)
   # if prices is missing, assume initial prices are 1
   if(missing(prices)) {
-    prices <- prices_from_relatives(price_relatives,
-                                    rep(1, ncol(price_relatives)))
+    prices <- compute_prices_from_relatives(price_relatives,
+                                            rep(1, ncol(price_relatives)))
   }
   # if historical price means are missing, compute them
   if(missing(price_means)) {
-    price_means <- historical_price_means(prices, decay_factor)
+    price_means <- compute_historical_price_means(prices, decay_factor)
   }
   check_LOAD_args(price_relatives,
                   transaction_rate,
@@ -266,24 +266,26 @@ backtest_LOAD <- function(price_relatives,
   ntrading_periods <- nrow(price_relatives)
   nassets <- ncol(price_relatives)
 
-  # don't need last price relative bc done trading,
-  # once can see first price relative can see second price mean,
-  # and don't need last price mean bc done trading
-  pred_prices <- list(head(price_relatives, -1L), head(price_means[-1,], -1L)) %>%
+  # don't need last prices or means bc done trading,
+  pred_prices <- list(head(prices, -1L), head(price_means, -1L)) %>%
     purrr::map(purrr::array_branch, 2L) %>%
-    purrr::pmap(rollify_dbl(predict_price_LOAD,window_sizes = c(time_window, 1)),
-               regularization_factor = regularization_factor,
-               momentum_threshold = momentum_threshold) %>%
+    purrr::pmap(rollify_dbl(predict_price_LOAD,
+                            window_sizes = c(time_window, 1)),
+                regularization_factor = regularization_factor,
+                momentum_threshold = momentum_threshold) %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = nassets)
   # strip first (time_window-1) many rows
   pred_prices <- tail(pred_prices, -(time_window-1))
 
   # predicted price relatives
-  pred_pr <- pred_prices / prices[time_window:(ntrading_periods-1), ]
+  pred_pr <- pred_prices / prices[time_window:ntrading_periods, ]
 
   # now get each portfolio
-  next_pf <- function(prev_pf, pred_pr) {
+  #                   portfolio, price rel, price rel
+  next_pf <- function(prev_pf, prev_pr, pred_pr) {
+    # adjust portfolio to prices of the period
+    prev_pf <- price_adjusted_portfolio(prev_pf, prev_pr)
     mean_zero_pred_pr <- pred_pr - mean(pred_pr)
     gamma <- wealth_factor_threshold - drop(prev_pf %*% pred_pr)
     gamma <- gamma / drop(mean_zero_pred_pr %*% mean_zero_pred_pr)
@@ -292,12 +294,14 @@ backtest_LOAD <- function(price_relatives,
     }
     project_to_simplex(prev_pf + gamma * mean_zero_pred_pr)
   }
-  pred_pr %>%
-    purrr::array_branch(1L) %>%
-    purrr::accumulate(next_pf, .init = uniform_portfolio(nassets)) %>%
+  # nb: need curly brace so magrittr can parse .[[1]] and .[[2]]
+  list(tail(lag(price_relatives), -(time_window-2)), pred_pr) %>%
+    purrr::map(purrr::array_branch, 1L) %>%
+    {purrr::accumulate2(.[[1]], .[[2]],
+                        next_pf, .init = uniform_portfolio(nassets))} %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = nassets, byrow = TRUE) %>%
-    validate_portfolio_matrix(ntrading_periods - time_window + 1, nassets)
+    validate_portfolio_matrix(ntrading_periods - time_window + 2, nassets)
 }
 
 

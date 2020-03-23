@@ -2,42 +2,49 @@
 % Please edit documentation in R/momentum_prediction.R
 \name{predict_momentum_LOAD}
 \alias{predict_momentum_LOAD}
-\title{predicts momentum for asset according to LOAD strategy}
+\title{Test momentum prediction using LOAD strategy}
 \usage{
 predict_momentum_LOAD(
-  prev_prices,
-  historic_mean,
+  decay_factor,
   regularization_factor,
+  time_window,
   momentum_threshold,
-  min_var = .Machine$double.eps^0.25
+  prices
 )
 }
 \arguments{
-\item{prev_prices}{a numeric vector of previous prices}
-
-\item{historic_mean}{The historic mean of the prices}
+\item{decay_factor}{\eqn{\alpha} in the referenced paper, LOAD predicts
+that stocks regressing to the mean have approximate price
+\eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}}
 
 \item{regularization_factor}{\eqn{\lambda} in the referenced paper,
 the regularization coeffecient for weight decay when
 regressing the prices in the recent time window.
 Must be non-negative}
 
+\item{time_window}{\eqn{w} in the referenced paper.
+The number of trading periods (including
+the most recent) to regress on (must be at least 2)}
+
 \item{momentum_threshold}{\eqn{\eta} in the referenced paper.
 If the regressed slope is greater than \eqn{\eta} we say the
 stock has momentum. This must be greater than 0.}
 
-\item{min_var}{(OPTIONAL) minimum variance to be determined non-constant}
+\item{prices}{The prices during the trading periods (a matrix
+with one more row than \code{price_relatives}).}
+
+\item{price_means}{The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
++ \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
+same size as \code{prices}.}
 }
 \value{
-the predicted next momentum (1 or 0)
+A ntime_periods x nassets matrix, with each entry
+    LOAD's predicted momentum for that time period (i.e.
+    before seeing that time period) or NA
 }
 \description{
-predicts next momentum for one asset
- given previous prices according to LOAD
-strategy (see paper mentioned in description of
-\code{\link{backtest_LOAD}}), momentu is defined in
-\code{\link{evaluate_momentum}}.
-}
-\note{
-NO TYPE CHECKING IS PERFORMED... be careful
+Test LOAD's strategy of predicting momentum. Returns
+each momentum prediction.
+See \code{\link{evaluate_momentum}} for a description
+of momentum
 }

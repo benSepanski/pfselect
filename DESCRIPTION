@@ -19,5 +19,7 @@ Imports:
     dplyr,
     rvest,
     httr,
-    glmnet
+    glmnet,
+    tibble,
+    tidyr
 RoxygenNote: 7.1.0
