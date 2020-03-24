@@ -363,17 +363,15 @@ nested_cv <- function(f,
                       nfolds) {
   # some input validation
   assert_that(is.data.frame(data))
-  assert_that(is.vector(output))
-  assert_that(is_numeric_vector(output_weights))
-  assert_that(all(output_weights >= 0))
+  assert_that(all(output >= 0))
   assert_that(are_equal(nrow(data), length(output)))
   if(missing(nfolds)) {
-    nfolds = length(y) - 1
+    nfolds = length(output) - 1
   }
   assert_that(is_whole_number(nfolds))
   assert_that(nfolds > 1)
   # compute each fold
-  n <- length(y)
+  n <- length(output)
   index_folds <- 1:n %>%
     split(cut(1:n, nfolds, labels = FALSE)) %>%
     purrr::map_int(max)
@@ -381,7 +379,7 @@ nested_cv <- function(f,
   previous_data <- list()
 
   # Now estimate with nested cv
-  err_df <- tibble::tibble(tuning_parameters = tuning_parameter,
+  err_df <- tibble::tibble(tuning_parameters = tuning_parameters,
                            error = rep(0, length(tuning_parameters)))
   for(i in 1:(n-1)) {
     # get train/test data

@@ -61,8 +61,6 @@ momentum_confusion_table <- function(prices,
                                      predicted_momentum,
                                      consider_negative_momentum = TRUE) {
 
-  x <- 1
-  y <- 2
   prices %>%
     get_all_previous_price_windows(time_window) %>%
     dplyr::mutate(hpm = historic_price_means[matrix(c(trading_period, asset),
@@ -75,6 +73,7 @@ momentum_confusion_table <- function(prices,
         evaluate_momentum,
         consider_negative_momentum = consider_negative_momentum)
       ) %>%
+    tidyr::drop_na() %>%
     dplyr::group_by(predicted, actual) %>%
     dplyr::count()
 }
@@ -190,14 +189,15 @@ predict_momentum_LOAD <- function(decay_factor,
 #' @importFrom magrittr %>%
 #' @export
 #'
-predict_momentum_reg_pocket <- function(prices,
-                                        time_window,
-                                        price_means,
-                                        weight_elimination,
-                                        trading_period_probs,
-                                        nfolds,
-                                        maxit_per_fold,
-                                        num_train) {
+predict_momentum_reg_pocket_cv <- function(prices,
+                                           time_window,
+                                           price_means,
+                                           weight_elimination,
+                                           trading_period_probs,
+                                           nfolds,
+                                           maxit_per_fold,
+                                           num_train) {
+  stop("In development")
   assert_that(is_whole_number(num_train))
   assert_that(num_train > time_window)
 
@@ -222,7 +222,9 @@ predict_momentum_reg_pocket <- function(prices,
                                   initial_weights = initial_weights
                                   )
     # record the weights in parent frame
-    assign(prev_weights, append(prev_weights, weights), envir = parent.frame())
+    assign("previous_data",
+           append(prev_weights, weights),
+           envir = parent.frame())
     # return an error function
     function(windows_and_probs, output) {
       row_probs <- windows_and_probs$row_probs
@@ -237,28 +239,27 @@ predict_momentum_reg_pocket <- function(prices,
   # This houses momentum and windows, with extra info
   data <- prices %>%
     get_all_previous_price_windows(time_window) %>%
-    dplyr::mutate(hpm = historic_price_means[matrix(c(trading_period, asset),
-                                                    ncol = 2)
-                                             ]) %>%
+    dplyr::mutate(hpm = price_means[matrix(c(trading_period, asset), ncol = 2)
+                                    ]) %>%
     dplyr::mutate(
       momentum = purrr::pmap_dbl(
         list(previous_price_window, price, hpm),
         evaluate_momentum,
         consider_negative_momentum = FALSE)
       )
-  windows_and_probs <- data$previous_price_windows %>%
+  windows_and_probs <- data$previous_price_window %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = time_window, byrow = TRUE) %>%
     tibble::as_tibble()
   windows_and_probs$row_probs <- trading_period_probs[data$trading_period]
 
   # CV on training data
-  cv_res <- nested_cv(pocket_tuned_by_elim,
-                      dplyr::slice(windows_and_probs, 1:num_train),
-                      data$momentum[1:num_train],
-                      weight_elimination,
-                      maxit_per_fold,
-                      nfolds)
+  cv_res <- nested_cv(f = pocket_tuned_by_elim,
+                      data = dplyr::slice(windows_and_probs, 1:num_train),
+                      output = data$momentum[1:num_train],
+                      tuning_parameters = weight_elimination,
+                      maxit_per_fold = maxit_per_fold,
+                      nfolds = nfolds)
   elim <- weight_elimination[[which.min(cv_res$err)]]
 
   # now predict all the momentum
@@ -274,17 +275,83 @@ predict_momentum_reg_pocket <- function(prices,
                                   )
     momentum[i] <- sign(drop(weights[1] + windows[i, ] %*% weights[-1]))
     # CV with new training data to pick next elim
-    cv_res <- nested_cv(pocket_tuned_by_elim,
-                        dplyr::slice(windows_and_probs, 1:i),
-                        data$momentum[1:i],
-                        weight_elimination,
-                        maxit_per_fold,
-                        nfolds)
+  cv_res <- nested_cv(f = pocket_tuned_by_elim,
+                      data = dplyr::slice(windows_and_probs, 1:i),
+                      output = data$momentum[1:i],
+                      tuning_parameters = weight_elimination,
+                      maxit_per_fold = maxit_per_fold,
+                      nfolds = nfolds)
     elim <- weight_elimination[[which.min(cv_res$err)]]
   }
   momentum
 }
 
+#' Predict the momentum using a regularized pocket algorithm
+#'
+#' Trains on the first
+#' num_train parameters from the given weight elimination parameters.
+#' Then, predicts the remaining momenta.
+#'
+#' @inheritParams predict_momentum_reg_pocket_cv
+#' @param weight_elimination the weight elimination factor to use
+#' @param maxit the max number of iterations when training
+#' @param num_train the number of initial trading periods to train on
+#'
+#' @importFrom magrittr %>%
+#'
+#' @export
+#'
+predict_momentum_reg_pocket <- function(prices,
+                                        time_window,
+                                        price_means,
+                                        weight_elimination,
+                                        trading_period_probs,
+                                        maxit,
+                                        num_train) {
+  assert_that(is_whole_number(num_train))
+  assert_that(num_train > time_window)
+
+  # This houses momentum and windows, with extra info
+  data <- prices %>%
+    get_all_previous_price_windows(time_window) %>%
+    dplyr::mutate(hpm = price_means[matrix(c(trading_period, asset), ncol = 2)
+                                    ]) %>%
+    dplyr::mutate(
+      momentum = purrr::pmap_dbl(
+        list(previous_price_window, price, hpm),
+        evaluate_momentum,
+        consider_negative_momentum = FALSE)
+      )
+
+  y <- 2 * data$momentum - 1  # [0 1] -> [-1 1]
+  x <- data$previous_price_window %>%
+    purrr::flatten_dbl() %>%
+    matrix(ncol = time_window, byrow = TRUE) %>%
+    tibble::as_tibble()
+  x$price_means = lag(price_means)[matrix(c(data$trading_period, data$asset),
+                                          ncol = 2)]
+  x <- as.matrix(x)
+  row_probs <- trading_period_probs[data$trading_period]
+
+  nassets <- ncol(prices)
+  weights <- regularized_pocket(x = x[1:(num_train*nassets),],
+                                y = y[1:(num_train*nassets)],
+                                weight_elimination = weight_elimination,
+                                maxit = maxit,
+                                row_probs = row_probs[1:(num_train*nassets)],
+                                )
+  # this will hold our predicted momentum
+  predicted_momentum <- rep(NA_real_, length(data$momentum))
+  remainder <- (num_train*nassets+1):length(predicted_momentum)
+  predicted_momentum[remainder] <-
+    sign(drop(weights[1] + x[remainder, ] %*% weights[-1]))
+  predicted_momentum <- (predicted_momentum + 1) / 2 # [-1 1] -> [0 1]
+
+  reshaped_mom <- matrix(nrow = nrow(prices), ncol = ncol(prices))
+  reshaped_mom[matrix(c(data$trading_period, data$asset), ncol = 2)] <-
+    predicted_momentum
+  reshaped_mom
+}
 
 
 
