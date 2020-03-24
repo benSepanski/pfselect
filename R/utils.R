@@ -1,3 +1,7 @@
+
+# Type checks -------------------------------------------------------------
+
+
 #' tests whether x is close to an integer
 #'
 #' Test whether x is close to an integer,
@@ -52,6 +56,8 @@ validate_nonnegative_mat <- function(mat) {
   assert_that(all(mat >= 0))
   mat
 }
+
+# Simplex Utils -----------------------------------------------------------
 
 
 #' Computes Euclidean Projection onto simplex
@@ -135,6 +141,10 @@ rdirichlet_onehalf <- function(n, d) {
 }
 
 
+
+# Rolling -----------------------------------------------------------------
+
+
 #' rollify f to operate over windows
 #'
 #' Returns a function which rolls \code{f} over windows.
@@ -148,8 +158,7 @@ rdirichlet_onehalf <- function(n, d) {
 #' would call rollify(f)(xvec, yvec, zvec). These vecs
 #' must all have the same length, and there must be at least one.
 #'
-#' @param f the function to roll. \code{f} must return
-#'     some double value.
+#' @param f the function to roll.
 #' @param window_sizes the size of the windows in each parameter.
 #'     Must be at least one.
 #' @param fill the value to fill in entries when there isn't
@@ -158,14 +167,48 @@ rdirichlet_onehalf <- function(n, d) {
 #' @return a function which rolls \code{f} over windows of the
 #'     given sizes.
 #'
-#' @importFrom purrr map
+#' @importFrom purrr map map2
+#' @importFrom magrittr %>%
+#'
+rollify <- function(f, window_sizes, fill = NA) {
+
+  get_windowed_l <- function(offset, l) {
+    window <- map(window_sizes,
+                  ~seq.int(from = offset + 1 - .x, length.out = .x))
+    l[1:length(window)] <- map2(l[1:length(window)], window, `[`)
+    l
+  }
+
+  function(...) {
+    l <- list(...)
+    # assume all same length
+    roll_length <- length(l[[1]])
+    rolled_result <- rep(list(NA), roll_length)
+    # now roll results over windows
+    roll_range <- max(window_sizes):roll_length
+    rolled_result[roll_range] <- roll_range %>%
+      map(get_windowed_l, l) %>%
+      map(do.call, what = f)
+    rolled_result
+  }
+}
+
+#' @describeIn rollify
+#'
+#' \code{rollify} is to \code{rollify_dbl} as \code{purrr::map}
+#' is to \code{purrr::map_dbl}. i.e. for \code{rollify_dbl}, \code{f}
+#' \emph{MUST} return a single numeric value.
+#' Instead of returning a list, the function returned
+#' by \code{rollify_dbl} returns a numeric vector.
+#'
+#' @importFrom purrr map map2 map_dbl
 #' @importFrom magrittr %>%
 #'
 rollify_dbl <- function(f, window_sizes, fill = NA) {
 
   get_windowed_l <- function(offset, l) {
     window <- map(window_sizes,
-                  ~seq.int(from = offset, by = -1, length.out = .x))
+                  ~seq.int(from = offset + 1 - .x, length.out = .x))
     l[1:length(window)] <- map2(l[1:length(window)], window, `[`)
     l
   }
@@ -179,10 +222,13 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
     roll_range <- max(window_sizes):roll_length
     rolled_result[roll_range] <- roll_range %>%
       map(get_windowed_l, l) %>%
-      purrr::map_dbl(do.call, what = f)
+      map_dbl(do.call, what = f)
     rolled_result
   }
 }
+
+
+# Regularized Pocket ------------------------------------------------------
 
 
 #' Perform regularized pocket algorithm

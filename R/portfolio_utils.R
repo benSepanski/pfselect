@@ -1,3 +1,7 @@
+
+# Validation --------------------------------------------------------------
+
+
 #' Validates and returns a portfolio
 #'
 #' Asserts that \code{portfolio} is a numeric vector
@@ -41,6 +45,9 @@ validate_portfolio_matrix <- function(portfolio_matrix,
 }
 
 
+# Uniform Portfolio -------------------------------------------------------
+
+
 #' Returns a uniform portfolio
 #'
 #' Returns a uniform portfolio over the given number of assets
@@ -51,6 +58,10 @@ validate_portfolio_matrix <- function(portfolio_matrix,
 uniform_portfolio <- function(nassets) {
   rep(1/nassets, nassets)
 }
+
+
+# Common Price Computations -----------------------------------------------
+
 
 #' get prices from price relatives
 #'
@@ -221,3 +232,66 @@ get_return_from_trade <- function(price_relatives, tr,
   # Now the wealth factor is (1-trading_cost) * factor from price relatives
   (1 - tr * sum(abs(trade))) * as.double(portfolio %*% price_relatives)
 }
+
+
+# Data Wrangling ----------------------------------------------------------
+
+
+#' Get all price windows of size window_size
+#'
+#' A previous price window of size w is the
+#' w prices before the current price.
+#'
+#' This function
+#' returns a dtibble frame holding all the price windows of
+#' size w for all assets in \code{prices}
+#'
+#' @inheritParams backtest_buyandhold
+#' @param window_size the size of a previous price window.
+#'     Must be a postivie whole number
+#' @return A data frame with columns "asset" holding
+#'     the column index of the price,
+#'     "trading_period" holding the row index of the price,
+#'     "price" holding the price during the trading period,
+#'     and "previous_price_window": holding a list which
+#'     contains either previous price window in order
+#'     (least recent -> most recent).
+#'     Rows will be be ordered by trading period, but other than
+#'     that the order is undefined.
+#'
+#' @importFrom assertthat assert_that
+#' @importFrom magrittr %>%
+#'
+get_all_previous_price_windows <- function(prices, window_size) {
+  # some input validation
+  assert_that(is_numeric_matrix(prices))
+  assert_that(is_whole_number(window_size))
+  assert_that(0 < window_size && window_size < nrow(prices))
+
+  # windows will be a list, each entry a tibble
+  # containing the previous price windows
+  windows <- prices %>%
+    head(-1L) %>%   # strip last row
+    purrr::array_branch(2L) %>%
+    purrr::map(rollify(identity, window_sizes = window_size)) %>%
+    purrr::map(tail, -(window_size-1)) %>%   # strip first (window_size-1) rows
+    purrr::map(tibble::tibble) %>%
+    purrr::map(`colnames<-`, "previous_price_window")
+  # Now put all the tibbles together, group and nested by trading period
+  trading_period <- (window_size+1):nrow(prices)
+  list(windows, array_branch(prices[trading_period, ], 2L)) %>%
+    purrr::pmap_dfr(~dplyr::mutate(.x,
+                                   price = .y,
+                                   trading_period = trading_period),
+                    .id = "asset") %>%
+    dplyr::mutate(asset = as.integer(asset)) %>%
+    dplyr::arrange(trading_period)
+}
+
+
+
+
+
+
+
+

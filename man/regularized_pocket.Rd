@@ -4,7 +4,14 @@
 \alias{regularized_pocket}
 \title{Perform regularized pocket algorithm}
 \usage{
-regularized_pocket(x, y, weight_elimination, weight_decay, maxit)
+regularized_pocket(
+  x,
+  y,
+  weight_elimination,
+  weight_decay,
+  maxit,
+  initial_weights
+)
 }
 \arguments{
 \item{x}{A numeric matrix with \eqn{n} rows. Should NOT include
@@ -17,6 +24,9 @@ a column of all 1s for bias weight.}
 \item{weight_decay}{\eqn{\lambda} in the description}
 
 \item{maxit}{the maximum number of iteratoins}
+
+\item{initial_weights}{the initial weights. If missing, uses linear
+regression}
 }
 \value{
 perceptron weights

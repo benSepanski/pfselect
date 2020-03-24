@@ -1,3 +1,7 @@
+
+# Analysis ----------------------------------------------------------------
+
+
 #' Evaluate momentum of the price
 #'
 #' We propose three estimators for the next price, and define
@@ -45,60 +49,34 @@ evaluate_momentum <- function(previous_prices, price, historic_price_mean,
 #' @param predicted_momentum A matrix the same dimension as prices
 #'     holding the predicted momentum or NA
 #'
-#' @return A confusion matrix for the momentum
+#' @return A tibble holding the entries of
+#'     a confusion matrix for the momentum
 #'
 #' @importFrom magrittr %>%
 #'
 #' @export
-momentum_confusion_matrix <- function(prices,
+momentum_confusion_table <- function(prices,
                                       historic_price_means,
                                       time_window,
                                       predicted_momentum,
                                       consider_negative_momentum = TRUE) {
-  # get actual momentum
-  actual_momentum <- list(lag(prices), prices, historic_price_means) %>%
-    purrr::map(purrr::array_branch, 2L) %>%
-    purrr::pmap(rollify_dbl(evaluate_momentum,
-                            window_sizes = c(time_window, 1, 1)),
-                consider_negative_momentum = consider_negative_momentum) %>%
-    flatten_dbl() %>%
-    matrix(ncol = ncol(prices))
 
-  # gets index into confusion matrix
-  if(consider_negative_momentum) {
-    momentum_values <- c(-1,0,1)
-  }
-  else {
-    momentum_values <- c(0,1)
-  }
-  vals_to_index <- function(predicted, true) {
-    index <- match(c(predicted, true), momentum_values)
-    matrix(index, nrow = 2)
-  }
-
-  # indices will become a matrix with columns
-  # (row, col, n) indicating the row and column index, as well as the count
-  indices <- list(predicted_momentum, actual_momentum) %>%
-    purrr::map(purrr::array_branch) %>%
-    purrr::pmap(vals_to_index) %>%
-    flatten_dbl() %>%
-    matrix(ncol = 2, byrow = TRUE) %>%
-    `colnames<-`(c("row", "col")) %>%
-    tibble::as_tibble() %>%
-    tidyr::drop_na() %>%
-    dplyr::group_by(row, col) %>%
-    dplyr::count() %>%
-    as.matrix()
-
-  # now make confusion matrix
-  confusion_matrix <- matrix(0,
-                             nrow = length(momentum_values),
-                             ncol = length(momentum_values))
-  colnames(confusion_matrix) <- glue::glue("Mom={momentum_values}")
-  rownames(confusion_matrix) <- glue::glue("Predicted={momentum_values}")
-
-  confusion_matrix[indices[,-3]] <- indices[,3]
-  confusion_matrix
+  x <- 1
+  y <- 2
+  prices %>%
+    get_all_previous_price_windows(time_window) %>%
+    dplyr::mutate(hpm = historic_price_means[matrix(c(trading_period, asset),
+                                                    ncol = 2)
+                                             ]) %>%
+    dplyr::transmute(
+      predicted = predicted_momentum[trading_period],
+      actual = purrr::pmap_dbl(
+        list(previous_price_window, price, hpm),
+        evaluate_momentum,
+        consider_negative_momentum = consider_negative_momentum)
+      ) %>%
+    dplyr::group_by(predicted, actual) %>%
+    dplyr::count()
 }
 
 
@@ -198,18 +176,34 @@ predict_momentum_LOAD <- function(decay_factor,
 #' @inheritParams nested_cv_regularized_pocket
 #' @export
 predict_momentum_reg_pocket <- function(prices,
+                                        time_window,
                                         price_means,
                                         weight_elimination,
                                         weight_decay,
                                         nfolds,
                                         maxit_per_fold,
                                         num_train) {
+  x <- matrix(nrow = ncol(prices) * (nrow(prices) - time_window+1))
+  for(i in time_window:nrow(prices)) {
+    for(j in 1:ncol(prices)) {
+      prev_prices <- prices[i, (j-time_window+1):j]
+      x[ncol(prices) * j + (i - time_window + 1), ] <- prev_prices
+      y[ncol(prices) * j + (i-time_window + 1)] <- evaluate_momentum(prev_prices,
+                                                                     prices[i][j],
+                                                                     price_means[i-1][j])
+    }
+  }
   cv_errs <- nested_cv_regularized_pocket(x[1:num_train, ],
                                           y[1:num_train],
                                           weight_elimination,
                                           weight_decay,
                                           nfolds,
                                           maxit_per_fold)
+  row <- which.min(cv_errs$cv_err)
+  momentum <- rep(NA_real_, nrow(prices))
+  for(i in (num_train+1):(prices - time_window)) {
+
+  }
 }
 
 

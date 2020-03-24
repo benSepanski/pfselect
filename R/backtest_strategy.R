@@ -295,7 +295,7 @@ backtest_LOAD <- function(price_relatives,
     project_to_simplex(prev_pf + gamma * mean_zero_pred_pr)
   }
   # nb: need curly brace so magrittr can parse .[[1]] and .[[2]]
-  list(tail(lag(price_relatives), -(time_window-2)), pred_pr) %>%
+  list(tail(lag(price_relatives), -(time_window-1)), pred_pr) %>%
     purrr::map(purrr::array_branch, 1L) %>%
     {purrr::accumulate2(.[[1]], .[[2]],
                         next_pf, .init = uniform_portfolio(nassets))} %>%
