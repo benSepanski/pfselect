@@ -4,14 +4,7 @@
 \alias{regularized_pocket}
 \title{Perform regularized pocket algorithm}
 \usage{
-regularized_pocket(
-  x,
-  y,
-  weight_elimination,
-  weight_decay,
-  maxit,
-  initial_weights
-)
+regularized_pocket(x, y, weight_elimination, maxit, row_probs, initial_weights)
 }
 \arguments{
 \item{x}{A numeric matrix with \eqn{n} rows. Should NOT include
@@ -19,33 +12,35 @@ a column of all 1s for bias weight.}
 
 \item{y}{a numeric vector with \eqn{n} columns}
 
-\item{weight_elimination}{\eqn{\eta} in the description}
+\item{weight_elimination}{\eqn{\lambda} in the description}
 
-\item{weight_decay}{\eqn{\lambda} in the description}
+\item{maxit}{the maximum number of iterations}
 
-\item{maxit}{the maximum number of iteratoins}
+\item{row_probs}{A vector of length \code{nrow(x)}.
+Each entry is the relative probability of choosing
+the corresponding row from x. It is also the weight
+which this entry receives when computing the average error
+for a set of weights.
+Defaults to uniform.}
 
-\item{initial_weights}{the initial weights. If missing, uses linear
-regression}
+\item{initial_weights}{the initial weights. If missing or NULL,
+uses linear regression}
 }
 \value{
 perceptron weights
 }
 \description{
-Performs the Perceptron Learning Algorithm with two regularization
-constants.
+Performs the Perceptron Learning Algorithm with weight elimination
 }
 \details{
 \deqn{
     [[sign(w^Tx_n) \neq y_n]]
-    + \frac{\eta}{2n}\sum_{i=1}^d\frac{w_i^2}{1+w_i^2}
-    + \frac{\lambda}{2n} \sum_{i=1}^d w_i^2
+    + \frac{\lambda}{2n}\sum_{i=1}^d\frac{w_i^2}{1+w_i^2}
 }
 We treat the PLA update as a ``derivative" of the first component.
 So, our update in the \eqn{i}th component will be
 \deqn{
     PLA_update
-    - \frac{\eta}{n}\frac{w_i}{(1+w_i^2)^2}
-    - \frac{\lambda}{n} w_i
+    - \frac{\lambda}{n}\frac{w_i}{(1+w_i^2)^2}
 }
 }

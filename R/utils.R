@@ -253,9 +253,12 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
 #' @param maxit the maximum number of iterations
 #' @param row_probs A vector of length \code{nrow(x)}.
 #'     Each entry is the relative probability of choosing
-#'     the corresponding row from x. Defaults to uniform.
-#' @param initial_weights the initial weights. If missing, uses linear
-#'     regression
+#'     the corresponding row from x. It is also the weight
+#'     which this entry receives when computing the average error
+#'     for a set of weights.
+#'     Defaults to uniform.
+#' @param initial_weights the initial weights. If missing or NULL,
+#'    uses linear regression
 #'
 #' @return perceptron weights
 #'
@@ -280,7 +283,7 @@ regularized_pocket <- function(x, y,
   }
   assert_that(is_numeric_vector(row_probs))
   assert_that(are_equal(nrow(x), length(row_probs)))
-  if(missing(initial_weights)) {
+  if(missing(initial_weights) || is.null(initial_weights)) {
     initial_weights <- lm(y~x)$coefficients
   }
   assert_that(is_numeric_vector(initial_weights))
@@ -300,8 +303,8 @@ regularized_pocket <- function(x, y,
       break
     }
     # OW choose a row and update to new weights if they're better
-    rel_probs <- row_probs[misclassified_indices]
-    ind <- sample.int(length(misclassified_indices), 1, prob = rel_probs)
+    probs <- row_probs[misclassified_indices]
+    ind <- sample.int(length(misclassified_indices), 1, prob = probs)
     row <- misclassified_indices[ind]
 
     next_weights <- weights
@@ -309,7 +312,10 @@ regularized_pocket <- function(x, y,
     next_weights[-1] <- (
       y[row] * x[row,] - weight_elimination * weights[-1] / (1+weights[-1]^2)^2
     )
-    err <- mean(sign(drop(next_weights[1] + x %*% next_weights[-1])) != y)
+    err <- weighted.mean(
+      x = sign(drop(next_weights[1] + x %*% next_weights[-1])) != y,
+      w = row_probs
+    )
     if(err < best_err) {
       weights <- next_weights
       best_err <- err
@@ -319,71 +325,77 @@ regularized_pocket <- function(x, y,
 }
 
 
-#' Uses nested cross-validation to pick parameters to \code{\link{regularized_pocket}}
+#' Use nested cross-validation to estimate error f w.r.t. tuning_parameter
 #'
-#' Tests all combinations of the weight elimination an
-#' variables using nested cross validation (i.e. the nth row/entry of x/y
-#' depends on the (n-1)th) and returns each pair with its associated
-#' error
+#' Tests each given option to tuning_parameter
+#' using nested cross validation (i.e. the nth row of data depends
+#' on the (n-1)th) to estimate the out-of-sample error of f
+#' w.r.t. the tuning_parameter
 #'
-#' @inheritParams regularized_pocket
-#' @param weight_elimination a vector of weight elimination constants to try
-#' @param weight_decay a vector of weight decay constants to try
+#' @param f Must be evaluated by calling on any consecutive subset
+#'     of the rows of data, output, and an entry from tuning_parameter,
+#'     e.g. \code{f(tuning_parameter[[1]], data, output)}. Should return
+#'     a function \code{g} which may be evaluated
+#'     on any consecutive subset of rows of data and output
+#'     as \code{g(data, output)} and return the error.
+#'     For both \code{f} and \code{g}, arguments are passed positionally.
+#'     To have \code{f} re-use data, have it access
+#'     the list \code{previous_data} in its \code{parent.frame()},
+#'     i.e. the execution environment of this function.
+#' @param data A data frame. Treats row index like time, first
+#'     rows are revealed first.
+#' @param output A vector of the desired output, each entry corresponds
+#'     to a row in the data frame
+#' @param tuning_parameters a list, each entry of which is a potential
+#'     tuning parameter to f
 #' @param nfolds Number of folds, if missing defaults to folds of size 1
-#' @param maxit_per_fold maxits per fold
 #'
-#' @return a data frame with each combination of weight elimination
-#'     and weight decay, as well as the recorded cv error
+#' @return a list with each weight elimination parameter
+#'     and the average cv error
 #'
-#' @export
+#' @importFrom assertthat assert_that are_equal
 #'
-nested_cv_regularized_pocket <- function(x, y,
-                                         weight_elimination,
-                                         weight_decay,
-                                         nfolds,
-                                         maxit_per_fold) {
-  assert_that(nfolds > 1)
+nested_cv <- function(f,
+                      data,
+                      output,
+                      tuning_parameters,
+                      maxit_per_fold,
+                      nfolds) {
+  # some input validation
+  assert_that(is.data.frame(data))
+  assert_that(is.vector(output))
+  assert_that(is_numeric_vector(output_weights))
+  assert_that(all(output_weights >= 0))
+  assert_that(are_equal(nrow(data), length(output)))
   if(missing(nfolds)) {
     nfolds = length(y) - 1
   }
-  # holds max index of each fold
-  index_folds <- split(1:length(y),
-                       cut(1:length(y), nfolds, labels = FALSE)) %>%
+  assert_that(is_whole_number(nfolds))
+  assert_that(nfolds > 1)
+  # compute each fold
+  n <- length(y)
+  index_folds <- 1:n %>%
+    split(cut(1:n, nfolds, labels = FALSE)) %>%
     purrr::map_int(max)
+  # for functions to re-use data
+  previous_data <- list()
 
-  get_cv_err <- function(elim, dec) {
-    weights <- regularized_pocket(x[1:max_ind[1],], y[1:max_ind[1]],
-                                  weight_elimination = elim,
-                                  weight_decay = dec,
-                                  maxit = maxit_per_fold)
-    err_range <- (max_ind[1]+1):max_ind[2]
-    err <- mean(sign(drop(x[err_range, ] %*% weights)) != y[err_range])
-    for(i in 2:(nfolds-1)) {
-      max_ind <- index_folds[i]
-      weights <- regularized_pocket(x[1:max_ind,], y[1:max_ind],
-                                    weight_elimination = elim,
-                                    weight_decay = dec,
-                                    maxit = maxit_per_fold,
-                                    init_weights = weights)
-      err_range <- (max_ind[i]+1):max_ind[i+1]
-      err <- err + mean(sign(drop(x[err_range,] %*% weights)) != y[err_range])
-    }
-    err / (nfolds-1)
+  # Now estimate with nested cv
+  err_df <- tibble::tibble(tuning_parameters = tuning_parameter,
+                           error = rep(0, length(tuning_parameters)))
+  for(i in 1:(n-1)) {
+    # get train/test data
+    train_data <- dplyr::slice(data, 1:index_folds[i])
+    train_out <- output[1:index_folds[i]]
+    test_data <- dplyr::slice(data, (index_folds[i]+1):index_folds[i+1])
+    test_out <- output[(index_folds[i]+1):index_folds[i+1]]
+    # compute error for each tuning parameter
+    err <- tuning_parameters %>%
+      purrr::map(f, train_data, train_out) %>%
+      purrr::map_dbl(~.(test_data, test_out))
+    err_df$error <- err_df$error + err
   }
 
-  candidate_reg <- cross2(weight_elimination, weight_decay) %>%
-    purrr::transpose() %>%
-    purrr::pmap_dfr(~list("weight_elimination" = .x,
-                          "weight_decay" = .y,
-                          "cv_err" = get_cv_err(.x,.y)))
+  err_df$error <- err_df$error / (n-1)
+  err_df
 }
-
-
-
-
-
-
-
-
-
-

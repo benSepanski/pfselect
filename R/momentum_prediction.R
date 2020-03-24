@@ -56,10 +56,10 @@ evaluate_momentum <- function(previous_prices, price, historic_price_mean,
 #'
 #' @export
 momentum_confusion_table <- function(prices,
-                                      historic_price_means,
-                                      time_window,
-                                      predicted_momentum,
-                                      consider_negative_momentum = TRUE) {
+                                     historic_price_means,
+                                     time_window,
+                                     predicted_momentum,
+                                     consider_negative_momentum = TRUE) {
 
   x <- 1
   y <- 2
@@ -171,39 +171,118 @@ predict_momentum_LOAD <- function(decay_factor,
 #' the remaining momenta.
 #'
 #' @inheritParams predict_momentum_LOAD
+#' @inheritParams nested_cv
 #' @param price_means the historic mean of the prices (exponentially
 #'      weighted average of past prices)
-#' @inheritParams nested_cv_regularized_pocket
+#' @param weight_elimination A list of weight elimination constants
+#'      to use during the nested cross-validation.
+#' @param nfolds the number of folds to cross-validate on at each
+#'      time-step
+#' @param trading_period_probs The relative probability of each trading period,
+#'      used for sampling and error evaluation
+#' @param maxit_per_fold maximum number of iterations in the pocket
+#'      algorithm per fold
+#' @param num_train The number of trading periods to train on
+#'      before predicting anything.
+#'
+#' @return the predicted momentum as a vector
+#'
+#' @importFrom magrittr %>%
 #' @export
+#'
 predict_momentum_reg_pocket <- function(prices,
                                         time_window,
                                         price_means,
                                         weight_elimination,
-                                        weight_decay,
+                                        trading_period_probs,
                                         nfolds,
                                         maxit_per_fold,
                                         num_train) {
-  x <- matrix(nrow = ncol(prices) * (nrow(prices) - time_window+1))
-  for(i in time_window:nrow(prices)) {
-    for(j in 1:ncol(prices)) {
-      prev_prices <- prices[i, (j-time_window+1):j]
-      x[ncol(prices) * j + (i - time_window + 1), ] <- prev_prices
-      y[ncol(prices) * j + (i-time_window + 1)] <- evaluate_momentum(prev_prices,
-                                                                     prices[i][j],
-                                                                     price_means[i-1][j])
+  assert_that(is_whole_number(num_train))
+  assert_that(num_train > time_window)
+
+  # As required by nested_cv
+  # windows_and_probs should have column $row_probs, and other columns
+  # cast-able to a matrix after row_probs is dropped
+  # output just the y
+  pocket_tuned_by_elim <- function(elim, windows_and_probs, output) {
+    row_probs <- windows_and_probs$row_probs
+    x <- as.matrix(mutate(windows_and_probs, row_probs = NULL))
+
+    initial_weights <- NULL
+    prev_weights <- get("previous_data", envir = parent.frame())
+    if(length(prev_weights) > 0) {
+      initial_weights <- prev_weights[length(prev_weights)]
+    }
+    weights <- regularized_pocket(x = x,
+                                  y = output,
+                                  weight_elimination = elim,
+                                  maxit = maxit_per_fold,
+                                  row_probs = row_probs,
+                                  initial_weights = initial_weights
+                                  )
+    # record the weights in parent frame
+    assign(prev_weights, append(prev_weights, weights), envir = parent.frame())
+    # return an error function
+    function(windows_and_probs, output) {
+      row_probs <- windows_and_probs$row_probs
+      x <- as.matrix(mutate(windows_and_probs, row_probs = NULL))
+      weighted.mean(sign(drop(weights[1] + x %*% weights[-1])) != output,
+                    w = row_probs)
     }
   }
-  cv_errs <- nested_cv_regularized_pocket(x[1:num_train, ],
-                                          y[1:num_train],
-                                          weight_elimination,
-                                          weight_decay,
-                                          nfolds,
-                                          maxit_per_fold)
-  row <- which.min(cv_errs$cv_err)
-  momentum <- rep(NA_real_, nrow(prices))
-  for(i in (num_train+1):(prices - time_window)) {
 
+  # this will hold our predicted momentum
+  momentum <- rep(NA_real_, nrow(prices))
+  # This houses momentum and windows, with extra info
+  data <- prices %>%
+    get_all_previous_price_windows(time_window) %>%
+    dplyr::mutate(hpm = historic_price_means[matrix(c(trading_period, asset),
+                                                    ncol = 2)
+                                             ]) %>%
+    dplyr::mutate(
+      momentum = purrr::pmap_dbl(
+        list(previous_price_window, price, hpm),
+        evaluate_momentum,
+        consider_negative_momentum = FALSE)
+      )
+  windows_and_probs <- data$previous_price_windows %>%
+    purrr::flatten_dbl() %>%
+    matrix(ncol = time_window, byrow = TRUE) %>%
+    tibble::as_tibble()
+  windows_and_probs$row_probs <- trading_period_probs[data$trading_period]
+
+  # CV on training data
+  cv_res <- nested_cv(pocket_tuned_by_elim,
+                      dplyr::slice(windows_and_probs, 1:num_train),
+                      data$momentum[1:num_train],
+                      weight_elimination,
+                      maxit_per_fold,
+                      nfolds)
+  elim <- weight_elimination[[which.min(cv_res$err)]]
+
+  # now predict all the momentum
+  weights <- NULL
+  windows <- mutate(windows_and_probs, row_probs = NULL)
+  for(i in (num_train+1):nrow(prices)) {
+    weights <- regularized_pocket(x = dplyr::slice(windows, 1:(i-1)),
+                                  y = data$momentum[1:(i-1)],
+                                  weight_elimination = elim,
+                                  maxit = maxit_per_fold,
+                                  row_probs = row_probs[1:(i-1)],
+                                  initial_weights = weights
+                                  )
+    momentum[i] <- sign(drop(weights[1] + windows[i, ] %*% weights[-1]))
+    # CV with new training data to pick next elim
+    cv_res <- nested_cv(pocket_tuned_by_elim,
+                        dplyr::slice(windows_and_probs, 1:i),
+                        data$momentum[1:i],
+                        weight_elimination,
+                        maxit_per_fold,
+                        nfolds)
+    elim <- weight_elimination[[which.min(cv_res$err)]]
   }
+  momentum
 }
 
 

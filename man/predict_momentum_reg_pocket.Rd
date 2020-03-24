@@ -9,7 +9,7 @@ predict_momentum_reg_pocket(
   time_window,
   price_means,
   weight_elimination,
-  weight_decay,
+  trading_period_probs,
   nfolds,
   maxit_per_fold,
   num_train
@@ -26,13 +26,23 @@ the most recent) to regress on (must be at least 2)}
 \item{price_means}{the historic mean of the prices (exponentially
 weighted average of past prices)}
 
-\item{weight_elimination}{a vector of weight elimination constants to try}
+\item{weight_elimination}{A list of weight elimination constants
+to use during the nested cross-validation.}
 
-\item{weight_decay}{a vector of weight decay constants to try}
+\item{trading_period_probs}{The relative probability of each trading period,
+used for sampling and error evaluation}
 
-\item{nfolds}{Number of folds, if missing defaults to folds of size 1}
+\item{nfolds}{the number of folds to cross-validate on at each
+time-step}
 
-\item{maxit_per_fold}{maxits per fold}
+\item{maxit_per_fold}{maximum number of iterations in the pocket
+algorithm per fold}
+
+\item{num_train}{The number of trading periods to train on
+before predicting anything.}
+}
+\value{
+the predicted momentum as a vector
 }
 \description{
 Cross validates over the first
