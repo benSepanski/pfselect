@@ -233,28 +233,27 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
 
 #' Perform regularized pocket algorithm
 #'
-#' Performs the Perceptron Learning Algorithm with two regularization
-#' constants.
+#' Performs the Perceptron Learning Algorithm with weight elimination
 #'
 #' \deqn{
 #'     [[sign(w^Tx_n) \neq y_n]]
-#'     + \frac{\eta}{2n}\sum_{i=1}^d\frac{w_i^2}{1+w_i^2}
-#'     + \frac{\lambda}{2n} \sum_{i=1}^d w_i^2
+#'     + \frac{\lambda}{2n}\sum_{i=1}^d\frac{w_i^2}{1+w_i^2}
 #' }
 #' We treat the PLA update as a ``derivative" of the first component.
 #' So, our update in the \eqn{i}th component will be
 #' \deqn{
 #'     PLA_update
-#'     - \frac{\eta}{n}\frac{w_i}{(1+w_i^2)^2}
-#'     - \frac{\lambda}{n} w_i
+#'     - \frac{\lambda}{n}\frac{w_i}{(1+w_i^2)^2}
 #' }
 #'
 #' @param x A numeric matrix with \eqn{n} rows. Should NOT include
 #'     a column of all 1s for bias weight.
 #' @param y a numeric vector with \eqn{n} columns
-#' @param weight_elimination \eqn{\eta} in the description
-#' @param weight_decay \eqn{\lambda} in the description
-#' @param maxit the maximum number of iteratoins
+#' @param weight_elimination \eqn{\lambda} in the description
+#' @param maxit the maximum number of iterations
+#' @param row_probs A vector of length \code{nrow(x)}.
+#'     Each entry is the relative probability of choosing
+#'     the corresponding row from x. Defaults to uniform.
 #' @param initial_weights the initial weights. If missing, uses linear
 #'     regression
 #'
@@ -266,39 +265,54 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
 #'
 regularized_pocket <- function(x, y,
                                weight_elimination,
-                               weight_decay,
                                maxit,
+                               row_probs,
                                initial_weights) {
   assert_that(is_numeric_matrix(x))
   assert_that(is_numeric_vector(y))
+  assert_that(is_whole_number(maxit))
+  assert_that(maxit > 0)
+  assert_that(rlang::is_scalar_double(weight_elimination))
+  assert_that(weight_elimination >= 0)
   assert_that(are_equal(nrow(x), length(y)))
-
-  n <- length(y)
-  weight_elimnation <- weight_elimination/n
-  weight_decay <- weight_decay/n
-  update_weights <- function(prev_weights, misclassified_indices) {
-    reg_update <- -weight_elimination * weights[-1] / (1+weights[-1]^2)^2
-    reg_update <- update - weight_decay * weights[-1]
-    weights[-1] <- weights[-1] + reg_update
-
-    row <- misclassified_indices[sample.int(length(misclassified_indices), 1)]
-    weights + y[row] * x[row, ]
+  if(missing(row_probs)) {
+    row_probs <- rep(1, nrow(x))
   }
-
+  assert_that(is_numeric_vector(row_probs))
+  assert_that(are_equal(nrow(x), length(row_probs)))
   if(missing(initial_weights)) {
-    initial_weights <- lm(y~x)
+    initial_weights <- lm(y~x)$coefficients
   }
+  assert_that(is_numeric_vector(initial_weights))
+  assert_that(are_equal(length(initial_weights), ncol(x) + 1))
+
+
+  weight_elimnation <- weight_elimination/length(y)
+
   weights <- initial_weights
   best_err <- 1
   for(i in 1:maxit) {
-    misclassified_indices <- which(sign(drop(x %*% weights)) != y)
+    misclassified_indices <- which(
+      sign(drop(weights[1] + x %*% weights[-1])) != y
+    )
+    # if none misclassified, done
     if(length(misclassified_indices) == 0) {
       break
     }
-    next_weights <- update_weights(weights)
-    err <- mean(sign(drop(x %*% next_weights)) != y)
+    # OW choose a row and update to new weights if they're better
+    rel_probs <- row_probs[misclassified_indices]
+    ind <- sample.int(length(misclassified_indices), 1, prob = rel_probs)
+    row <- misclassified_indices[ind]
+
+    next_weights <- weights
+    next_weights[1] <- next_weights[1] + y[row]
+    next_weights[-1] <- (
+      y[row] * x[row,] - weight_elimination * weights[-1] / (1+weights[-1]^2)^2
+    )
+    err <- mean(sign(drop(next_weights[1] + x %*% next_weights[-1])) != y)
     if(err < best_err) {
       weights <- next_weights
+      best_err <- err
     }
   }
   weights
@@ -307,7 +321,7 @@ regularized_pocket <- function(x, y,
 
 #' Uses nested cross-validation to pick parameters to \code{\link{regularized_pocket}}
 #'
-#' Tests all combinations of the weight elimination and weight decay
+#' Tests all combinations of the weight elimination an
 #' variables using nested cross validation (i.e. the nth row/entry of x/y
 #' depends on the (n-1)th) and returns each pair with its associated
 #' error
