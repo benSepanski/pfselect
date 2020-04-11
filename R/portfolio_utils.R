@@ -14,6 +14,7 @@
 #'
 #' @importFrom assertthat assert_that are_equal
 #'
+#' @noRd
 validate_portfolio <- function(portfolio, nassets) {
   assert_that(is_numeric_vector(portfolio))
   assert_that(are_equal(length(portfolio), nassets))
@@ -26,17 +27,19 @@ validate_portfolio <- function(portfolio, nassets) {
 #'
 #' @param portfolio_matrix a matrix where each row is a portfolio
 #' @param ntrading_periods the number of trading periods, \code{portfolio_matrix}
-#'     this many rows
+#'     should have this many rows plus one (because have initial portfolio,
+#'     then get a new one during each trading period).
 #' @param nassets the number of assets, should be the number of columns
 #'     in \code{portfolio_matrix}
 #' @return portfolio_matrix
 #'
 #' @importFrom assertthat assert_that are_equal
 #'
+#' @noRd
 validate_portfolio_matrix <- function(portfolio_matrix,
                                       ntrading_periods,
                                       nassets) {
-  assert_that(are_equal(nrow(portfolio_matrix), ntrading_periods))
+  assert_that(are_equal(nrow(portfolio_matrix), ntrading_periods+1))
   assert_that(are_equal(ncol(portfolio_matrix), nassets))
   for(row in 1:nrow(portfolio_matrix)) {
     validate_portfolio(portfolio_matrix[row, ], nassets)
@@ -55,6 +58,8 @@ validate_portfolio_matrix <- function(portfolio_matrix,
 #' @param nassets the number of assets
 #' @return a numeric vector of length \code{nassets}, each
 #'     with value \code{1/nassets}.
+#'
+#' @noRd
 uniform_portfolio <- function(nassets) {
   rep(1/nassets, nassets)
 }
@@ -68,35 +73,64 @@ uniform_portfolio <- function(nassets) {
 #' Given price_relatives and the initial prices, get the
 #' actual prices
 #'
-#' @param price_relatives a matrix of price relatives
-#'      where each row represents
-#'      a trading period and each column represents an asset
-#' @param initial_prices a vector whose \eqn{i}th entry is the price
-#'      of the asset represented by column \eqn{i}
-#'      of \code{price_relatives} immediately before trading period 1
+#' @param price_relatives a vector of price relatives
+#'      where each entry represents the price relative for
+#'      a trading period, i.e. price relative \eqn{x_t = p_{t+1} / p_t}.
+#' @param initial_price \eqn{p_1}, the initial price.
+#' @param .check_input If \code{TRUE}, checks that input meets the
+#'      given assumptions.
 #'
-#' @return A matrix with one more row and the same
-#'      number of columns as \code{price_relatives}
-#'      representing the true prices of the assets.
+#' @return A vector with one more entry than \code{price_relatives}
+#'      representing the true prices of the assets,
+#'      the \eqn{i}th entry being the price during trading in period
+#'      \eqn{i}, immediately before the price changes represent by price
+#'      relatives \eqn{i} take place.
 #'
-#' @importFrom magrittr %>%
-#' @importFrom assertthat assert_that are_equal
+#' @importFrom assertthat assert_that
 #'
 #' @export
 #'
-compute_prices_from_relatives <- function(price_relatives, initial_prices) {
+compute_prices_from_relatives <- function(price_relatives, initial_price,
+                                          .check_input = TRUE) {
   # type and dimension checks
-  assert_that(is_numeric_vector(initial_prices))
-  assert_that(is.numeric(price_relatives))
-  assert_that(is.matrix(price_relatives))
-  assert_that(are_equal(ncol(price_relatives), length(initial_prices)))
+  if(.check_input) {
+    assert_that(is_numeric_vector(price_relatives))
+    assert_that(all(price_relatives >= 0))
+    assert_that(rlang::is_scalar_double(initial_price))
+  }
+  cumprod(c(initial_price, price_relatives))
+}
 
-  price_relatives %>%
+#' Compute a price matrix from a price relatives matrix
+#'
+#' Computes a matrix of prices from a matrix
+#' of price relatives, where each column represents an asset
+#'
+#' @describeIn compute_prices_from_relatives
+#'
+#' @inheritParams compute_prices_from_relatives  # .check_input
+#' @inheritParams .backtest_strategy_template    # price_relative_matrix
+#' @param initial_prices A vector holding the initial prices of
+#'     each asset \eqn{i}
+#'
+#' @importFrom assertthat assert_that
+#' @importFrom magrittr %>%
+#'
+#' @export
+compute_price_matrix_from_relatives <- function(price_relative_matrix,
+                                                initial_prices,
+                                                .check_input = TRUE) {
+  if(.check_input) {
+    validate_nonnegative_matrix(price_relative_matrix)
+    assert_that(is_numeric_vector(initial_prices))
+  }
+  price_relative_matrix %>%
     purrr::array_branch(2L) %>%
-    purrr::map2(initial_prices, ~c(.y, .x)) %>%
-    purrr::map(cumprod) %>%
+    purrr::map2(initial_prices,
+                compute_prices_from_relatives,
+                .check_input = .check_input) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(price_relatives))
+    matrix(ncol = ncol(price_relative_matrix))
 }
 
 #' Return historical price means computed with decay factor
@@ -106,25 +140,58 @@ compute_prices_from_relatives <- function(price_relatives, initial_prices) {
 #' \deqn{MA_t = decay_factor \cdot p_t + (1-decay_factor) \cdot MA_{t-1}}
 #' And \eqn{MA_1 = p_1}.
 #'
-#' @note no input validation is performed
-#'
-#'  @param prices A matrix of prices, each row is a time period
-#'      and each column an asset
-#'  @param decay_factor the decay factor for the mean (see description)
-#'  @return A matrix with the same dimension as \code{prices}
+#' @inheritParams compute_prices_from_relatives
+#' @param prices A vector of prices
+#' @param decay_factor the decay factor for the mean (see description)
+#' @return A vector with the same dimension as \code{prices}
 #'      with historical price means as the entries
+#'
+#' @importFrom assertthat assert_that
+#'
+#' @export
+#'
+compute_historical_price_means <- function(prices, decay_factor = 0.5,
+                                           .check_input = TRUE) {
+  if(.check_input) {
+    assert_that(is_numeric_vector(prices))
+    assert_that(all(prices >= 0))
+    assert_that(rlang::is_scalar_double(decay_factor))
+    assert_that(0 <= decay_factor && decay_factor <= 1)
+  }
+  purrr::accumulate(prices, ~decay_factor*.y + (1-decay_factor)*.x)
+}
+
+
+#' Compute a historical price matrix from a price matrix
+#'
+#' Computes a matrix of historical price means from a matrix
+#' of prices, where each column represents an asset
+#'
+#' @describeIn compute_historical_price_means
+#'
+#' @inheritParams compute_historical_price_means # .check_input, decay_factor
+#' @param price_matrix A matrix of prices, where each row represents
+#'     a trading period and each column represents an asset
 #'
 #' @importFrom magrittr %>%
 #'
 #' @export
-#'
-compute_historical_price_means <- function(prices, decay_factor = 0.5) {
-  prices %>%
+compute_historical_price_mean_matrix <- function(price_matrix,
+                                                 decay_factor = 0.5,
+                                                 .check_input = TRUE) {
+  if(.check_input) {
+    validate_nonnegative_matrix(price_matrix)
+  }
+  price_matrix %>%
     purrr::array_branch(2L) %>%
-    purrr::map(purrr::accumulate, ~decay_factor*.y + (1-decay_factor)*.x) %>%
+    purrr::map(compute_historical_price_means, .check_input = .check_input) %>%
     purrr::flatten_dbl() %>%
-    matrix(nrow = nrow(prices))
+    matrix(ncol = ncol(price_matrix))
 }
+
+
+
+# Common Portfolio Computations -------------------------------------------
 
 
 #' renormalizes portfolio to show total portion of wealth in each asset
@@ -137,26 +204,31 @@ compute_historical_price_means <- function(prices, decay_factor = 0.5) {
 #' @param portfolio A vector of non-negative numbers which sum to 1,
 #'     the \eqn{i}th entry representing the portion of total wealth
 #'     in asset \eqn{i}.
-#' @param price_relatives A vector whose \eqn{i}th entry
+#' @param tp_price_relatives A vector whose \eqn{i}th entry
 #'     is the ratio of the \eqn{i}th asset's new price
-#'     to its old price. More precisely, if asset \eqn{i}
+#'     to its old price at the end of this
+#'     trading period. More precisely, if asset \eqn{i}
 #'     had price \eqn{p_{t-1}} when wealth was distributed
 #'     according to \code{portfolio}, but now has price \eqn{p_t},
 #'     the \eqn{i}th entry of \code{price_relatives} is
 #'     \eqn{\frac{p_t}{p_{t-1}}}.
+#' @inheritParams compute_prices_from_relatives
 #'
 #' @return A numeric vector whose \eqn{i}th entry is the portion of total
  #'      wealth in asset \eqn{i} (according to the new prices).
  #'
  #' @importFrom assertthat assert_that are_equal
  #'
-price_adjusted_portfolio <- function(portfolio, price_relatives) {
+price_adjusted_portfolio <- function(portfolio, tp_price_relatives,
+                                     .check_input = TRUE) {
   # some type checks
-  assert_that(is_numeric_vector(price_relatives))
-  assert_that(is_numeric_vector(portfolio))
-  assert_that(are_equal(length(portfolio), length(price_relatives)))
+  if(.check_input) {
+    assert_that(is_numeric_vector(tp_price_relatives))
+    assert_that(all(tp_price_relatives >= 0))
+    validate_portfolio(portfolio, length(tp_price_relatives))
+  }
   # return the adjusted portfolio
-  portfolio * price_relatives / as.double(portfolio %*% price_relatives)
+  portfolio * tp_price_relatives / drop(portfolio %*% tp_price_relatives)
 }
 
 #' Return the factor by which wealth increases
@@ -171,11 +243,12 @@ price_adjusted_portfolio <- function(portfolio, price_relatives) {
 #'      the proportion of total wealth in asset \eqn{i}
 #'      during the trading period \eqn{t-1}
 #'
-#' @param price_relatives A numeric vector whose \eqn{i}th entry
+#' @param tp_price_relatives A numeric vector whose \eqn{i}th entry
 #'      is the price relative for asset \eqn{i}, i.e. its price
 #'      at the new trading period divided by its price at the
 #'      previous trading period
-#' @param tr The transaction rate: a scalar in \eqn{[0,1]} which represents
+#' @param transaction_rate The transaction rate: a scalar in \eqn{[0,1]}
+#'      which represents
 #'      the percentage of any stock transaction (buying and selling) which
 #'      goes towards transaction costs.
 #' @param prev_portfolio The portfolio during the previous trading period
@@ -189,6 +262,7 @@ price_adjusted_portfolio <- function(portfolio, price_relatives) {
 #'      see the comments inside the function)
 #'  @param maxit Stops after \code{maxit} iterations in
 #'      used in computing a trade
+#'  @inheritParams compute_prices_from_relatives
 #'
 #' @return A numeric scalar representing the factor by which wealth
 #'      increases, i.e. if \eqn{S_t} is wealth
@@ -196,13 +270,24 @@ price_adjusted_portfolio <- function(portfolio, price_relatives) {
 #'
 #' @importFrom assertthat assert_that are_equal
 #'
-get_return_from_trade <- function(price_relatives, tr,
+get_return_from_trade <- function(tp_price_relatives, transaction_rate,
                                   prev_portfolio, portfolio,
-                                  tol = 1e-10, maxit = 15) {
-  # make sure we have portfolios
-  validate_portfolio(prev_portfolio, length(price_relatives))
-  validate_portfolio(portfolio, length(price_relatives))
+                                  tol = 1e-10, maxit = 15,
+                                  .check_input = TRUE) {
+  if(.check_input) {
+    # make sure we have portfolios
+    assert_that(is_numeric_vector(tp_price_relatives))
+    validate_portfolio(prev_portfolio, length(tp_price_relatives))
+    validate_portfolio(portfolio, length(tp_price_relatives))
+    assert_that(rlang::is_scalar_double(transaction_rate))
+    assert_that(0 <= transaction_rate && transaction_rate <= 1)
+    assert_that(is_whole_number(maxit))
+    assert_that(maxit > 0)
+    assert_that(is_scalar_double(tol))
+  }
 
+  # abbreviated names
+  tr <- transaction_rate
   # To move from portfolio b -> (b+a) with prices p and transaction
   # rate r and total wealth S, we have
   # Sb_i amount of currency of asset i.
@@ -230,68 +315,5 @@ get_return_from_trade <- function(price_relatives, tr,
     iter <- iter + 1
   }
   # Now the wealth factor is (1-trading_cost) * factor from price relatives
-  (1 - tr * sum(abs(trade))) * as.double(portfolio %*% price_relatives)
+  (1 - tr * sum(abs(trade))) * as.double(portfolio %*% tp_price_relatives)
 }
-
-
-# Data Wrangling ----------------------------------------------------------
-
-
-#' Get all price windows of size window_size
-#'
-#' A previous price window of size w is the
-#' w prices before the current price.
-#'
-#' This function
-#' returns a dtibble frame holding all the price windows of
-#' size w for all assets in \code{prices}
-#'
-#' @inheritParams backtest_buyandhold
-#' @param window_size the size of a previous price window.
-#'     Must be a postivie whole number
-#' @return A data frame with columns "asset" holding
-#'     the column index of the price,
-#'     "trading_period" holding the row index of the price,
-#'     "price" holding the price during the trading period,
-#'     and "previous_price_window": holding a list which
-#'     contains either previous price window in order
-#'     (least recent -> most recent).
-#'     Rows will be be ordered by trading period, but other than
-#'     that the order is undefined.
-#'
-#' @importFrom assertthat assert_that
-#' @importFrom magrittr %>%
-#'
-get_all_previous_price_windows <- function(prices, window_size) {
-  # some input validation
-  assert_that(is_numeric_matrix(prices))
-  assert_that(is_whole_number(window_size))
-  assert_that(0 < window_size && window_size < nrow(prices))
-
-  # windows will be a list, each entry a tibble
-  # containing the previous price windows
-  windows <- prices %>%
-    head(-1L) %>%   # strip last row
-    purrr::array_branch(2L) %>%
-    purrr::map(rollify(identity, window_sizes = window_size)) %>%
-    purrr::map(tail, -(window_size-1)) %>%   # strip first (window_size-1) rows
-    purrr::map(tibble::tibble) %>%
-    purrr::map(`colnames<-`, "previous_price_window")
-  # Now put all the tibbles together, group and nested by trading period
-  trading_period <- (window_size+1):nrow(prices)
-  list(windows, array_branch(prices[trading_period, ], 2L)) %>%
-    purrr::pmap_dfr(~dplyr::mutate(.x,
-                                   price = .y,
-                                   trading_period = trading_period),
-                    .id = "asset") %>%
-    dplyr::mutate(asset = as.integer(asset)) %>%
-    dplyr::arrange(trading_period)
-}
-
-
-
-
-
-
-
-

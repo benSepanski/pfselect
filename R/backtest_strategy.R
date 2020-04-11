@@ -1,71 +1,86 @@
+#' Generic backtest strategies documentation
+#'
+#' Basic parameters and return type for strategies
+#'
+#' @param price_relative_matrix a matrix of price relatives, each row
+#'     representing a trading period and each column an asset.
+#'     A price relative is \eqn{p_{t+1} / p_t}, i.e.
+#'     the ratio of trading price to next price. Prices change
+#'     according to the price relatives after the trade,
+#'     i.e. the price relatives for the trading period are not known
+#'     at trading time
+#' @param transaction_rate The percentage of each transaction (buy and sell)
+#'     spent on broker fees
+#' @return a matrix with the same number of columns and one more
+#'      row than \code{price_relative_matrix}, row \eqn{i}
+#'      is the portfolio after a trade during period \eqn{i}, i.e.
+#'      right before the \eqn{i}th price relatives change the prices.
+#' @docType
+#'
+#' @noRd
+.backtest_strategy_template <- function() {assert(FALSE)}
+
 #' checks input args to a strategy
 #'
 #' asserts that price relatives is a matrix with non-negative entries,
 #' and if a column hits zero it stays zero.
 #' asserts that transaction rate is a scalar double in \eqn{[0,1]}
 #'
-#' @param price_relatives the price relatives to check
-#' @param transaction_rate the transaction_rate to check
-#' @return No valid return
+#' @inheritParams _backtest_strategy_template
+#' @return Invisibly \code{TRUE}
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom rlang is_scalar_double
-check_strategy_args <- function(price_relatives, transaction_rate) {
-  assert_that(is_numeric_matrix(price_relatives))
-  assert_that(all(price_relatives >= 0))
-  assert_that(length(price_relatives) > 0)
-  for(col in 1:ncol(price_relatives)) {
+#'
+#' @noRd
+#'
+check_strategy_args <- function(price_relative_matrix, transaction_rate) {
+  assert_that(is_numeric_matrix(price_relative_matrix))
+  assert_that(all(price_relative_matrix >= 0))
+  assert_that(length(price_relative_matrix) > 0)
+  for(col in 1:ncol(price_relative_matrix)) {
     # if ever zeros out, must be zero rest of the time
-    near_zero <- price_relatives[, col] < .Machine$double.eps ^ 0.5
+    near_zero <- price_relative_matrix[, col] < .Machine$double.eps ^ 0.5
     if(any(near_zero)) {
-      first_zero_index <- min(which(price_relatives[, col]))
+      first_zero_index <- min(which(price_relative_matrix[, col]))
       assert_that(all(near_zero[first_zero:length(near_zero)]))
     }
   }
   # now check transaction_rate
   assert_that(is_scalar_double(transaction_rate))
   assert_that(0 <= transaction_rate && transaction_rate <= 1)
+  invisible(TRUE)
 }
 
 # Buy and Hold ---------------------------------------------------------------
 
 #' backtest a buy and hold strategy
 #'
-#' @param price_relatives a matrix of price relatives, each row
-#'     representing a trading period and each column an asset.
-#'     A price relative is \eqn{\frac{p_t}{p_{t-1}}}, i.e.
-#'     the ratio of previous price to new price. Prices change
-#'     according to the price relatives after the trade,
-#'     i.e. the price relatives for the trading period are not known
-#'     at trading time
-#' @param transaction_rate The percentage of each transaction (buy and sell)
-#'     spent on broker fees
+#' @inheritParams .backtest_strategy_template
+#' @inherit .backtest_strategy_template return
+#'
 #' @param initial_portfolio a vector whose \eqn{i}th entry is the
 #'     amount of wealth in the \eqn{i}th entry. Should
-#'     be a portfolio for the assets in \code{price_relatives}.
+#'     be a portfolio for the assets in \code{price_relative_matrix}.
 #'     This is the portfolio before the first trading period.
-#'
-#'  @return a matrix with the same number of rows and columns as
-#'      \code{price_relatives}, row \eqn{i}
-#'      is the portfolio after a trade during period \eqn{i}, i.e.
-#'      right before the \eqn{i}th price relatives change the prices.
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom magrittr %>%
 #' @export
-backtest_buyandhold <- function(price_relatives,
+backtest_buyandhold <- function(price_relative_matrix,
                                 transaction_rate,
                                 initial_portfolio) {
-  check_strategy_args(price_relatives, transaction_rate)
-  validate_portfolio(initial_portfolio, ncol(price_relatives))
+  # validate input
+  check_strategy_args(price_relative_matrix, transaction_rate)
+  validate_portfolio(initial_portfolio, ncol(price_relative_matrix))
 
-  price_relatives[-nrow(price_relatives), ] %>%
+  price_relative_matrix %>%
     purrr::array_branch(1L) %>%
-    purrr::accumulate(price_adjusted_portfolio,
-                      .init = initial_portfolio) %>%
+    purrr::accumulate(price_adjusted_portfolio, .init = initial_portfolio) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(price_relatives), byrow = TRUE) %>%
-    validate_portfolio_matrix(nrow(price_relatives), ncol(price_relatives))
+    matrix(ncol = ncol(price_relative_matrix), byrow = TRUE) %>%
+    validate_portfolio_matrix(nrow(price_relative_matrix),
+                              ncol(price_relative_matrix))
 }
 
 #' backtests a market (uniform buy and hold) strategy
@@ -76,10 +91,10 @@ backtest_buyandhold <- function(price_relatives,
 #' @inherit backtest_buyandhold return
 #' @inheritParams backtest_buyandhold
 #' @export
-backtest_market <- function(price_relatives, transaction_rate) {
-  backtest_buyandhold(price_relatives,
+backtest_market <- function(price_relative_matrix, transaction_rate) {
+  backtest_buyandhold(price_relative_matrix,
                       transaction_rate,
-                      uniform_portfolio(ncol(price_relatives)))
+                      uniform_portfolio(ncol(price_relative_matrix)))
 }
 
 #' backtests a best stock strategy
@@ -92,17 +107,19 @@ backtest_market <- function(price_relatives, transaction_rate) {
 #' @importFrom magrittr %>%
 #'
 #' @export
-backtest_best_stock <- function(price_relatives, transaction_rate) {
-  check_strategy_args(price_relatives, transaction_rate)
+backtest_best_stock <- function(price_relative_matrix, transaction_rate) {
+  check_strategy_args(price_relative_matrix, transaction_rate)
 
-  best_stock_index <- price_relatives %>%
+  best_stock_index <- price_relative_matrix %>%
     apply(2L, prod) %>%
     which.max()
   pfs <- matrix(data = 0,
-                nrow = nrow(price_relatives),
-                ncol = ncol(price_relatives))
+                nrow = nrow(price_relative_matrix)+1,
+                ncol = ncol(price_relative_matrix))
   pfs[, best_stock_index] <- 1
-  validate_portfolio_matrix(pfs, nrow(price_relatives), ncol(price_relatives))
+  validate_portfolio_matrix(pfs,
+                            nrow(price_relative_matrix),
+                            ncol(price_relative_matrix))
 }
 
 
@@ -113,50 +130,55 @@ backtest_best_stock <- function(price_relatives, transaction_rate) {
 #'
 #' checks that the args to \code{\link{backtest_LOAD}}
 #' satisfy their requirements. Does not check
-#' price_relatives or transaction_rate.
+#' price_relative_matrix or transaction_rate.
 #'
 #' @inheritParams backtest_LOAD
+#'
 #' @importFrom assertthat assert_that are_equal
 #' @importFrom rlang is_scalar_double
-check_LOAD_args <- function(price_relatives,
+#' @importFrom magrittr %>%
+#'
+#' @noRd
+check_LOAD_args <- function(price_relative_matrix,
                             transaction_rate,
                             decay_factor,
                             regularization_factor,
                             time_window,
                             momentum_threshold,
                             wealth_factor_threshold,
-                            prices,
-                            price_means) {
+                            price_matrix,
+                            price_mean_matrix) {
   # type and scalar checks
   assert_that(is_scalar_double(decay_factor))
   assert_that(is_scalar_double(regularization_factor))
   assert_that(is_whole_number(time_window))
   assert_that(is_scalar_double(momentum_threshold))
   assert_that(is_scalar_double(wealth_factor_threshold))
-  assert_that(is_numeric_matrix(prices))
-  assert_that(is_numeric_matrix(price_means))
+  assert_that(is_numeric_matrix(price_matrix))
+  assert_that(is_numeric_matrix(price_mean_matrix))
   # Domain checks
   assert_that(0 <= decay_factor && decay_factor <= 1)
   assert_that(regularization_factor >= 0)
   assert_that(time_window >= 2)
   assert_that(momentum_threshold >= 0)
   assert_that(wealth_factor_threshold >= 1)
-  assert_that(all(prices >= 0))
-  assert_that(all(price_means >= 0))
+  assert_that(all(price_matrix >= 0))
+  assert_that(all(price_mean_matrix >= 0))
   # dimension checks
-  ntrading_periods <- nrow(price_relatives)
-  nassets <- ncol(price_relatives)
-  assert_that(are_equal(ncol(prices), nassets))
-  assert_that(are_equal(nrow(prices), ntrading_periods + 1))
-  assert_that(are_equal(ncol(price_means), nassets))
-  assert_that(are_equal(nrow(price_means), ntrading_periods + 1))
+  ntrading_periods <- nrow(price_relative_matrix)
+  nassets <- ncol(price_relative_matrix)
+  assert_that(are_equal(ncol(price_matrix), nassets))
+  assert_that(are_equal(nrow(price_matrix), ntrading_periods + 1))
+  assert_that(are_equal(ncol(price_mean_matrix), nassets))
+  assert_that(are_equal(nrow(price_mean_matrix), ntrading_periods + 1))
   # Now check prices match price relatives and price_means match
   # decay_factor
-  expected_p <- compute_prices_from_relatives(price_relatives, prices[1,])
-  assert_that(are_equal(expected_p, prices))
-  expected_means <- compute_historical_price_means(prices,
-                                                   decay_factor = decay_factor)
-  assert_that(are_equal(expected_means, price_means))
+  expected_p <- compute_price_matrix_from_relatives(price_relative_matrix,
+                                                    price_matrix[1,])
+  assert_that(are_equal(expected_p, price_matrix))
+  expected_means <- compute_historical_price_mean_matrix(price_matrix,
+                                                         decay_factor)
+  assert_that(are_equal(expected_means, price_mean_matrix))
 }
 
 
@@ -202,8 +224,8 @@ predict_price_LOAD <- function(prev_prices,
 #'
 #' Initial portfolio is uniform.
 #'
-#' @inherit backtest_buyandhold return
-#' @inheritParams backtest_buyandhold
+#' @inherit .backtest_strategy_template return
+#' @inheritParams .backtest_strategy_template
 #' @param decay_factor \eqn{\alpha} in the referenced paper, LOAD predicts
 #'     that stocks regressing to the mean have approximate price
 #'     \eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}
@@ -222,10 +244,10 @@ predict_price_LOAD <- function(prev_prices,
 #'     trading period is predicted, this is the minimum return
 #'     our traded portfolio should satisfy. This must be greater
 #'     than 0.
-#' @param prices (OPTIONAL) The prices during the trading periods (a matrix
-#'     with one more row than \code{price_relatives}).
+#' @param price_matrix (OPTIONAL) The prices during the trading periods
+#'     (a matrix with one more row than \code{price_relative_matrix}).
 #'     If not included, initial prices are assumed to be one.
-#' @param price_means (OPTIONAL)
+#' @param price_mean_matrix (OPTIONAL)
 #'     The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
 #'     + \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
 #'     same size as \code{prices}. If not used, these are computed
@@ -234,40 +256,41 @@ predict_price_LOAD <- function(prev_prices,
 #' @importFrom assertthat assert_that
 #' @export
 #'
-backtest_LOAD <- function(price_relatives,
+backtest_LOAD <- function(price_relative_matrix,
                           transaction_rate,
                           decay_factor,
                           regularization_factor,
                           time_window,
                           momentum_threshold,
                           wealth_factor_threshold,
-                          prices,
-                          price_means) {
-  check_strategy_args(price_relatives, transaction_rate)
+                          price_matrix,
+                          price_mean_matrix) {
+  check_strategy_args(price_relative_matrix, transaction_rate)
   # if prices is missing, assume initial prices are 1
-  if(missing(prices)) {
-    prices <- compute_prices_from_relatives(price_relatives,
-                                            rep(1, ncol(price_relatives)))
+  if(missing(price_matrix)) {
+    price_matrix <-
+      compute_price_matrix_from_relatives(price_relative_matrix,
+                                          rep(1, ncol(price_relative_matrix)))
   }
   # if historical price means are missing, compute them
-  if(missing(price_means)) {
-    price_means <- compute_historical_price_means(prices, decay_factor)
+  if(missing(price_mean_matrix)) {
+    price_mean_matrix <- compute_historical_price_mean_matrix(price_matrix,
+                                                              decay_factor)
   }
-  check_LOAD_args(price_relatives,
+  check_LOAD_args(price_relative_matrix,
                   transaction_rate,
                   decay_factor,
                   regularization_factor,
                   time_window,
                   momentum_threshold,
                   wealth_factor_threshold,
-                  prices,
-                  price_means)
+                  price_matrix,
+                  price_mean_matrix)
 
-  ntrading_periods <- nrow(price_relatives)
-  nassets <- ncol(price_relatives)
+  ntrading_periods <- nrow(price_relative_matrix)
+  nassets <- ncol(price_relative_matrix)
 
-  # don't need last prices or means bc done trading,
-  pred_prices <- list(head(prices, -1L), head(price_means, -1L)) %>%
+  pred_prices <- list(price_matrix, price_mean_matrix) %>%
     purrr::map(purrr::array_branch, 2L) %>%
     purrr::pmap(rollify_dbl(predict_price_LOAD,
                             window_sizes = c(time_window, 1)),
@@ -275,11 +298,11 @@ backtest_LOAD <- function(price_relatives,
                 momentum_threshold = momentum_threshold) %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = nassets)
-  # strip first (time_window-1) many rows
+  # strip first (time_window-1) many rows (NA)
   pred_prices <- tail(pred_prices, -(time_window-1))
 
   # predicted price relatives
-  pred_pr <- pred_prices / prices[time_window:ntrading_periods, ]
+  pred_pr <- pred_prices / tail(price_matrix, -(time_window-1))
 
   # now get each portfolio
   #                   portfolio, price rel, price rel
@@ -295,7 +318,7 @@ backtest_LOAD <- function(price_relatives,
     project_to_simplex(prev_pf + gamma * mean_zero_pred_pr)
   }
   # nb: need curly brace so magrittr can parse .[[1]] and .[[2]]
-  list(tail(lag(price_relatives), -(time_window-1)), pred_pr) %>%
+  list(tail(price_relative_matrix, -(time_window-2)), pred_pr) %>%
     purrr::map(purrr::array_branch, 1L) %>%
     {purrr::accumulate2(.[[1]], .[[2]],
                         next_pf, .init = uniform_portfolio(nassets))} %>%
@@ -323,19 +346,19 @@ backtest_LOAD <- function(price_relatives,
 #' @param learning_rate The learning rate (\eqn{\eta} in the referenced
 #'     paper), a higher learning rate corresponds to a higher
 #'     sensitivitiy as one would expect.
-#' @inheritParams backtest_buyandhold
-#' @inherit backtest_buyandhold return
+#' @inheritParams .backtest_strategy_template
+#' @inherit .backtest_strategy_template return
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom magrittr %>%
 #'
 #' @export
 #'
-backtest_exponential_gradient <- function(price_relatives,
+backtest_exponential_gradient <- function(price_relative_matrix,
                                           transaction_rate,
                                           learning_rate) {
   # input checks
-  check_strategy_args(price_relatives, transaction_rate)
+  check_strategy_args(price_relative_matrix, transaction_rate)
   assert_that(rlang::is_scalar_double(learning_rate))
   assert_that(0 <= learning_rate)
 
@@ -347,14 +370,15 @@ backtest_exponential_gradient <- function(price_relatives,
                                      drop(prev_pf %*% prev_price_relative))
     unnormalized_pf / sum(unnormalized_pf)
   }
+  ntrading_periods <- nrow(price_relative_matrix)
+  nassets <- ncol(price_relative_matrix)
   # now accumulate the exponential gradient solution
-  price_relatives[-nrow(price_relatives), ] %>%
+  price_relative_matrix %>%
     purrr::array_branch(1L) %>%
-    purrr::accumulate(next_pf,
-                      .init = uniform_portfolio(ncol(price_relatives))) %>%
+    purrr::accumulate(next_pf, .init = uniform_portfolio(nassets)) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(price_relatives), byrow = TRUE) %>%
-    validate_portfolio_matrix(nrow(price_relatives), ncol(price_relatives))
+    matrix(ncol = nassets, byrow = TRUE) %>%
+    validate_portfolio_matrix(ntrading_periods, nassets)
 }
 
 
@@ -379,18 +403,20 @@ backtest_exponential_gradient <- function(price_relatives,
 #'
 #' initializes to uniform portfolio
 #'
-#' @inheritParams backtest_buyandhold
-#' @inherit backtest_buyandhold return
+#' @inheritParams .backtest_strategy_template
+#' @inherit .backtest_strategy_templtae return
 #'
 #' @importFrom magrittr %>%
 #'
 #' @export
 #'
-backtest_online_newton_step <- function(price_relatives, transaction_rate) {
-  check_strategy_args(price_relatives, transaction_rate)
+backtest_online_newton_step <- function(price_relative_matrix,
+                                        transaction_rate) {
+  # input checks
+  check_strategy_args(price_relative_matrix, transaction_rate)
 
-  ntrading_periods <- nrow(price_relatives)
-  nassets <- ncol(price_relatives)
+  ntrading_periods <- nrow(price_relative_matrix)
+  nassets <- ncol(price_relative_matrix)
 
   eta <- 0
   beta <- 1
@@ -409,7 +435,7 @@ backtest_online_newton_step <- function(price_relatives, transaction_rate) {
     p * (1-eta) + eta * unif_p
   }
 
-  price_relatives[-nrow(price_relatives), ] %>%
+  price_relative_matrix %>%
     purrr::array_branch(1L) %>%
     purrr::accumulate(next_pf, .init = uniform_portfolio(nassets)) %>%
     purrr::flatten_dbl() %>%
@@ -449,33 +475,34 @@ backtest_online_newton_step <- function(price_relatives, transaction_rate) {
 #'     computed without consider transaction costs. If \code{TRUE},
 #'     follows Blum & Kalai's 1991 paper and considers the transaction
 #'     costs.
-#' @inheritParams backtest_buyandhold
-#' @inherit backtest_buyandhold return
+#' @inheritParams .backtest_strategy_template
+#' @inherit .backtest_strategy_template return
 #'
 #' @importFrom magrittr %>%
 #'
 #' @export
 #'
-backtest_universal_portfolio <- function(price_relatives,
+backtest_universal_portfolio <- function(price_relative_matrix,
                                          transaction_rate,
                                          nsamples,
                                          consider_transaction_rate = TRUE) {
-  check_strategy_args(price_relatives, transaction_rate)
+  # input checks
+  check_strategy_args(price_relative_matrix, transaction_rate)
   assert_that(is_whole_number(nsamples))
   assert_that(nsamples > 1)
   assert_that(rlang::is_scalar_logical(consider_transaction_rate))
 
-  ntrading_periods <- nrow(price_relatives)
-  nassets <- ncol(price_relatives)
+  ntrading_periods <- nrow(price_relative_matrix)
+  nassets <- ncol(price_relative_matrix)
 
   # nsamples x nassets
   rportfolios <- rdirichlet_onehalf(nsamples, nassets)
   if(!consider_transaction_rate || are_equal(transaction_rate, 0)) {
     # nsamples x (ntrading periods)
-    daily_return <- rportfolios %*% t(price_relatives)
+    daily_return <- rportfolios %*% t(price_relative_matrix)
   }
   else {
-    wealth <- list(rportfolios, price_relatives) %>%
+    wealth <- list(rportfolios, price_relative_matrix) %>%
       map(array_branch, 1L) %>%
       cross() %>%
       purrr::map_dbl(~ wealth_increase_factor(price_relatives = .[[2]],
@@ -497,10 +524,12 @@ backtest_universal_portfolio <- function(price_relatives,
     array_branch(2L) %>%
     purrr::map(~apply(rportfolios, 2L, weighted.mean, w = .)) %>%
     purrr::flatten_dbl() %>%
+    c(uniform_portfolio(nassets), .) %>%  # prepend first portfolio
     matrix(ncol = nassets, byrow = TRUE) %>%
     validate_portfolio_matrix(ntrading_periods = ntrading_periods,
                               nassets = nassets)
 }
+
 
 
 

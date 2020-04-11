@@ -4,29 +4,13 @@
 \alias{backtest_buyandhold}
 \title{backtest a buy and hold strategy}
 \usage{
-backtest_buyandhold(price_relatives, transaction_rate, initial_portfolio)
+backtest_buyandhold(price_relative_matrix, transaction_rate, initial_portfolio)
 }
 \arguments{
-\item{price_relatives}{a matrix of price relatives, each row
-representing a trading period and each column an asset.
-A price relative is \eqn{\frac{p_t}{p_{t-1}}}, i.e.
-the ratio of previous price to new price. Prices change
-according to the price relatives after the trade,
-i.e. the price relatives for the trading period are not known
-at trading time}
-
-\item{transaction_rate}{The percentage of each transaction (buy and sell)
-spent on broker fees}
-
 \item{initial_portfolio}{a vector whose \eqn{i}th entry is the
-    amount of wealth in the \eqn{i}th entry. Should
-    be a portfolio for the assets in \code{price_relatives}.
-    This is the portfolio before the first trading period.
-
- @return a matrix with the same number of rows and columns as
-     \code{price_relatives}, row \eqn{i}
-     is the portfolio after a trade during period \eqn{i}, i.e.
-     right before the \eqn{i}th price relatives change the prices.}
+amount of wealth in the \eqn{i}th entry. Should
+be a portfolio for the assets in \code{price_relatives}.
+This is the portfolio before the first trading period.}
 }
 \description{
 backtest a buy and hold strategy

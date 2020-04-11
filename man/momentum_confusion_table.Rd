@@ -23,7 +23,7 @@ the most recent) to regress on (must be at least 2)}
 \item{predicted_momentum}{A matrix the same dimension as prices
 holding the predicted momentum or NA}
 
-\item{consider_negative_momentum}{If \code{FALSE}, then only
+\item{consider_negative_momentum}{If \code{FALSE}, then
 does not consider -1 as an option for momentum, i.e.
 only checks historic mean and max of previous prices}
 }

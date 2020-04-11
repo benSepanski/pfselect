@@ -5,21 +5,23 @@
 \title{Return the factor by which wealth increases}
 \usage{
 get_return_from_trade(
-  price_relatives,
-  tr,
+  tp_price_relatives,
+  transaction_rate,
   prev_portfolio,
   portfolio,
   tol = 1e-10,
-  maxit = 15
+  maxit = 15,
+  .check_input = TRUE
 )
 }
 \arguments{
-\item{price_relatives}{A numeric vector whose \eqn{i}th entry
+\item{tp_price_relatives}{A numeric vector whose \eqn{i}th entry
 is the price relative for asset \eqn{i}, i.e. its price
 at the new trading period divided by its price at the
 previous trading period}
 
-\item{tr}{The transaction rate: a scalar in \eqn{[0,1]} which represents
+\item{transaction_rate}{The transaction rate: a scalar in \eqn{[0,1]}
+which represents
 the percentage of any stock transaction (buying and selling) which
 goes towards transaction costs.}
 
@@ -35,7 +37,8 @@ after the trade}
     reach a solution, since the trade is defined implicitly,
     see the comments inside the function)
 @param maxit Stops after \code{maxit} iterations in
-    used in computing a trade}
+    used in computing a trade
+@inheritParams compute_prices_from_relatives}
 }
 \value{
 A numeric scalar representing the factor by which wealth

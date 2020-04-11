@@ -5,29 +5,18 @@
 \title{Backtests the LOAD Online PS System}
 \usage{
 backtest_LOAD(
-  price_relatives,
+  price_relative_matrix,
   transaction_rate,
   decay_factor,
   regularization_factor,
   time_window,
   momentum_threshold,
   wealth_factor_threshold,
-  prices,
-  price_means
+  price_matrix,
+  price_mean_matrix
 )
 }
 \arguments{
-\item{price_relatives}{a matrix of price relatives, each row
-representing a trading period and each column an asset.
-A price relative is \eqn{\frac{p_t}{p_{t-1}}}, i.e.
-the ratio of previous price to new price. Prices change
-according to the price relatives after the trade,
-i.e. the price relatives for the trading period are not known
-at trading time}
-
-\item{transaction_rate}{The percentage of each transaction (buy and sell)
-spent on broker fees}
-
 \item{decay_factor}{\eqn{\alpha} in the referenced paper, LOAD predicts
 that stocks regressing to the mean have approximate price
 \eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}}
@@ -51,11 +40,11 @@ trading period is predicted, this is the minimum return
 our traded portfolio should satisfy. This must be greater
 than 0.}
 
-\item{prices}{(OPTIONAL) The prices during the trading periods (a matrix
-with one more row than \code{price_relatives}).
+\item{price_matrix}{(OPTIONAL) The prices during the trading periods
+(a matrix with one more row than \code{price_relatives}).
 If not included, initial prices are assumed to be one.}
 
-\item{price_means}{(OPTIONAL)
+\item{price_mean_matrix}{(OPTIONAL)
 The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
 + \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
 same size as \code{prices}. If not used, these are computed

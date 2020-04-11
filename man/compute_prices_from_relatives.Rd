@@ -2,25 +2,50 @@
 % Please edit documentation in R/portfolio_utils.R
 \name{compute_prices_from_relatives}
 \alias{compute_prices_from_relatives}
+\alias{compute_price_matrix_from_relatives}
 \title{get prices from price relatives}
 \usage{
-compute_prices_from_relatives(price_relatives, initial_prices)
+compute_prices_from_relatives(
+  price_relatives,
+  initial_price,
+  .check_input = TRUE
+)
+
+compute_price_matrix_from_relatives(
+  price_relative_matrix,
+  initial_prices,
+  .check_input = TRUE
+)
 }
 \arguments{
-\item{price_relatives}{a matrix of price relatives
-where each row represents
-a trading period and each column represents an asset}
+\item{price_relatives}{a vector of price relatives
+where each entry represents the price relative for
+a trading period, i.e. price relative \eqn{x_t = p_{t+1} / p_t}.}
 
-\item{initial_prices}{a vector whose \eqn{i}th entry is the price
-of the asset represented by column \eqn{i}
-of \code{price_relatives} immediately before trading period 1}
+\item{initial_price}{\eqn{p_1}, the initial price.}
+
+\item{.check_input}{If \code{TRUE}, checks that input meets the
+given assumptions.}
+
+\item{initial_prices}{A vector holding the initial prices of
+each asset \eqn{i}}
 }
 \value{
-A matrix with one more row and the same
-     number of columns as \code{price_relatives}
-     representing the true prices of the assets.
+A vector with one more entry than \code{price_relatives}
+     representing the true prices of the assets,
+     the \eqn{i}th entry being the price during trading in period
+     \eqn{i}, immediately before the price changes represent by price
+     relatives \eqn{i} take place.
 }
 \description{
 Given price_relatives and the initial prices, get the
 actual prices
+
+Computes a matrix of prices from a matrix
+of price relatives, where each column represents an asset
 }
+\section{Functions}{
+\itemize{
+\item \code{compute_price_matrix_from_relatives}: 
+}}
+

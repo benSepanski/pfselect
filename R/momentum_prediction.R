@@ -1,44 +1,4 @@
 
-# Analysis ----------------------------------------------------------------
-
-
-#' Evaluate momentum of the price
-#'
-#' We propose three estimators for the next price, and define
-#' its momentum by whichever is closest:
-#' the max of previous prices is momentum +1, the min of previous
-#' prices is momentum -1, and the historical mean is momentum 0
-#'
-#' Note that this definition of momentum is scale-invariant, i.e.
-#' if all the prices are scaled (and the historic price means
-#' computed on these scaled prices) the momentum results are identical.
-#'
-#' @param previous_price prices of asset in period \eqn{t-\tau+1,...t}
-#' @param price price of asset in period \eqn{t+1}
-#' @param historic_price_mean historic price mean at period \eqn{t}.
-#'     For some \eqn{\alpha\in[0,1]}, the historic price mean
-#'     is \eqn{MA_t = \alpha p_t + (1-\alpha) MA_{t-1}}, with
-#'     \eqn{MA_1 = p_1}.
-#' @param consider_negative_momentum If \code{FALSE}, then only
-#'     does not consider -1 as an option for momentum, i.e.
-#'     only checks historic mean and max of previous prices
-#'
-#' @return the momentum defined in the description
-#'
-#' @export
-#'
-evaluate_momentum <- function(previous_prices, price, historic_price_mean,
-                              consider_negative_momentum = TRUE) {
-  if(consider_negative_momentum) {
-    ests <- c(min(previous_prices), historic_price_mean, max(previous_prices))
-    # index mapped from [1 2 3] -> [-1 0 1]
-    return(which.min(abs(ests - price)) - 2)
-  }
-  ests <- c(historic_price_mean, max(previous_prices))
-  which.min(abs(ests - price)) - 1
-}
-
-
 #' Compute a confusion matrix for price momentum
 #'
 #' Given prices and historical price means, as well as predicted momenta,

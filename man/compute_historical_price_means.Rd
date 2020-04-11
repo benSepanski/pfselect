@@ -2,22 +2,43 @@
 % Please edit documentation in R/portfolio_utils.R
 \name{compute_historical_price_means}
 \alias{compute_historical_price_means}
+\alias{compute_historical_price_mean_matrix}
 \title{Return historical price means computed with decay factor}
 \usage{
-compute_historical_price_means(prices, decay_factor = 0.5)
+compute_historical_price_means(prices, decay_factor = 0.5, .check_input = TRUE)
+
+compute_historical_price_mean_matrix(
+  price_matrix,
+  decay_factor = 0.5,
+  .check_input = TRUE
+)
+}
+\arguments{
+\item{prices}{A vector of prices}
+
+\item{decay_factor}{the decay factor for the mean (see description)}
+
+\item{.check_input}{If \code{TRUE}, checks that input meets the
+given assumptions.}
+
+\item{price_matrix}{A matrix of prices, where each row represents
+a trading period and each column represents an asset}
+}
+\value{
+A vector with the same dimension as \code{prices}
+     with historical price means as the entries
 }
 \description{
 We define the historical price mean MA_t at time t
 to be
 \deqn{MA_t = decay_factor \cdot p_t + (1-decay_factor) \cdot MA_{t-1}}
 And \eqn{MA_1 = p_1}.
-}
-\note{
-no input validation is performed
 
- @param prices A matrix of prices, each row is a time period
-     and each column an asset
- @param decay_factor the decay factor for the mean (see description)
- @return A matrix with the same dimension as \code{prices}
-     with historical price means as the entries
+Computes a matrix of historical price means from a matrix
+of prices, where each column represents an asset
 }
+\section{Functions}{
+\itemize{
+\item \code{compute_historical_price_mean_matrix}: 
+}}
+

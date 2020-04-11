@@ -4,19 +4,7 @@
 \alias{backtest_best_stock}
 \title{backtests a best stock strategy}
 \usage{
-backtest_best_stock(price_relatives, transaction_rate)
-}
-\arguments{
-\item{price_relatives}{a matrix of price relatives, each row
-representing a trading period and each column an asset.
-A price relative is \eqn{\frac{p_t}{p_{t-1}}}, i.e.
-the ratio of previous price to new price. Prices change
-according to the price relatives after the trade,
-i.e. the price relatives for the trading period are not known
-at trading time}
-
-\item{transaction_rate}{The percentage of each transaction (buy and sell)
-spent on broker fees}
+backtest_best_stock(price_relative_matrix, transaction_rate)
 }
 \description{
 Backtests a stragey which buys the best stock and sits on it

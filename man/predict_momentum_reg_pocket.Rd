@@ -2,7 +2,7 @@
 % Please edit documentation in R/momentum_prediction.R
 \name{predict_momentum_reg_pocket}
 \alias{predict_momentum_reg_pocket}
-\title{Predict the momentum using a cross-validated regularized pocket algorithm}
+\title{Predict the momentum using a regularized pocket algorithm}
 \usage{
 predict_momentum_reg_pocket(
   prices,
@@ -10,8 +10,7 @@ predict_momentum_reg_pocket(
   price_means,
   weight_elimination,
   trading_period_probs,
-  nfolds,
-  maxit_per_fold,
+  maxit,
   num_train
 )
 }
@@ -26,27 +25,17 @@ the most recent) to regress on (must be at least 2)}
 \item{price_means}{the historic mean of the prices (exponentially
 weighted average of past prices)}
 
-\item{weight_elimination}{A list of weight elimination constants
-to use during the nested cross-validation.}
+\item{weight_elimination}{the weight elimination factor to use}
 
 \item{trading_period_probs}{The relative probability of each trading period,
 used for sampling and error evaluation}
 
-\item{nfolds}{the number of folds to cross-validate on at each
-time-step}
+\item{maxit}{the max number of iterations when training}
 
-\item{maxit_per_fold}{maximum number of iterations in the pocket
-algorithm per fold}
-
-\item{num_train}{The number of trading periods to train on
-before predicting anything.}
-}
-\value{
-the predicted momentum as a vector
+\item{num_train}{the number of initial trading periods to train on}
 }
 \description{
-Cross validates over the first
-num_train parameters from the given weight elimination parameters
-and weight decay parameters over time. Then predicts
-the remaining momenta.
+Trains on the first
+num_train parameters from the given weight elimination parameters.
+Then, predicts the remaining momenta.
 }
