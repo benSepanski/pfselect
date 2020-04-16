@@ -24,7 +24,7 @@ evaluate_daily_return <- function(price_relative_matrix,
                                   portfolios_after_trade,
                                   transaction_rate) {
   # Input validation
-  validate_nonnegative_matrix(price_relative_matrix)
+  assert_that(is_numeric_matrix(price_relative_matrix))
   validate_portfolio_matrix(portfolios_after_trade,
                             nrow(price_relative_matrix) - 1,
                             ncol(price_relative_matrix))

@@ -17,6 +17,17 @@ backtest_LOAD(
 )
 }
 \arguments{
+\item{price_relative_matrix}{a matrix of price relatives, each row
+representing a trading period and each column an asset.
+A price relative is \eqn{p_{t+1} / p_t}, i.e.
+the ratio of trading price to next price. Prices change
+according to the price relatives after the trade,
+i.e. the price relatives for the trading period are not known
+at trading time}
+
+\item{transaction_rate}{The percentage of each transaction (buy and sell)
+spent on broker fees}
+
 \item{decay_factor}{\eqn{\alpha} in the referenced paper, LOAD predicts
 that stocks regressing to the mean have approximate price
 \eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}}
@@ -41,7 +52,7 @@ our traded portfolio should satisfy. This must be greater
 than 0.}
 
 \item{price_matrix}{(OPTIONAL) The prices during the trading periods
-(a matrix with one more row than \code{price_relatives}).
+(a matrix with one more row than \code{price_relative_matrix}).
 If not included, initial prices are assumed to be one.}
 
 \item{price_mean_matrix}{(OPTIONAL)
@@ -49,6 +60,12 @@ The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
 + \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
 same size as \code{prices}. If not used, these are computed
 from the prices}
+}
+\value{
+a matrix with the same number of columns and one more
+row than \code{price_relative_matrix}, row \eqn{i}
+is the portfolio after a trade during period \eqn{i}, i.e.
+right before the \eqn{i}th price relatives change the prices.
 }
 \description{
 Runs the LOAD online PS System: For each stock

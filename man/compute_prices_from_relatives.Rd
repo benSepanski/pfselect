@@ -27,8 +27,19 @@ a trading period, i.e. price relative \eqn{x_t = p_{t+1} / p_t}.}
 \item{.check_input}{If \code{TRUE}, checks that input meets the
 given assumptions.}
 
+\item{price_relative_matrix}{a matrix of price relatives, each row
+representing a trading period and each column an asset.
+A price relative is \eqn{p_{t+1} / p_t}, i.e.
+the ratio of trading price to next price. Prices change
+according to the price relatives after the trade,
+i.e. the price relatives for the trading period are not known
+at trading time}
+
 \item{initial_prices}{A vector holding the initial prices of
 each asset \eqn{i}}
+
+\item{transaction_rate}{The percentage of each transaction (buy and sell)
+spent on broker fees}
 }
 \value{
 A vector with one more entry than \code{price_relatives}
@@ -40,12 +51,11 @@ A vector with one more entry than \code{price_relatives}
 \description{
 Given price_relatives and the initial prices, get the
 actual prices
-
-Computes a matrix of prices from a matrix
-of price relatives, where each column represents an asset
 }
 \section{Functions}{
 \itemize{
-\item \code{compute_price_matrix_from_relatives}: 
+\item \code{compute_price_matrix_from_relatives}: Computes a matrix of prices from a matrix
+of price relatives, where each column represents an asset.
+Output has same column names as \code{price_relative_matrix}
 }}
 

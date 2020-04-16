@@ -16,13 +16,6 @@ predict_momentum_reg_pocket_cv(
 )
 }
 \arguments{
-\item{prices}{The prices during the trading periods (a matrix
-with one more row than \code{price_relatives}).}
-
-\item{time_window}{\eqn{w} in the referenced paper.
-The number of trading periods (including
-the most recent) to regress on (must be at least 2)}
-
 \item{price_means}{the historic mean of the prices (exponentially
 weighted average of past prices)}
 

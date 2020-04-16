@@ -33,12 +33,11 @@ We define the historical price mean MA_t at time t
 to be
 \deqn{MA_t = decay_factor \cdot p_t + (1-decay_factor) \cdot MA_{t-1}}
 And \eqn{MA_1 = p_1}.
-
-Computes a matrix of historical price means from a matrix
-of prices, where each column represents an asset
 }
 \section{Functions}{
 \itemize{
-\item \code{compute_historical_price_mean_matrix}: 
+\item \code{compute_historical_price_mean_matrix}: Computes a matrix of historical price means from a matrix
+of prices, where each column represents an asset.
+Ouptut has same column names as \code{price_matrix}
 }}
 

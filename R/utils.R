@@ -46,23 +46,6 @@ is_numeric_matrix <- function(x) {
   is.numeric(x) && is.matrix(x)
 }
 
-#' Validates and returns a numeric matrix
-#'
-#' Asserts that \code{mat} is a numeric matrix
-#' with non-negative entries.
-#' Returns \code{portfolio}
-#'
-#' @param mat the object to validate
-#' @return Returns \code{mat}
-#'
-#' @importFrom assertthat assert_that
-#'
-#' @noRd
-validate_nonnegative_matrix <- function(mat) {
-  assert_that(is_numeric_matrix(mat))
-  assert_that(all(mat >= 0))
-  mat
-}
 
 # Simplex Utils -----------------------------------------------------------
 
@@ -193,6 +176,7 @@ regularized_pocket <- function(x, y,
                                maxit,
                                row_probs,
                                initial_weights) {
+  # type checks
   assert_that(is_numeric_matrix(x))
   assert_that(is_numeric_vector(y))
   assert_that(is_whole_number(maxit))
@@ -211,7 +195,7 @@ regularized_pocket <- function(x, y,
   assert_that(is_numeric_vector(initial_weights))
   assert_that(are_equal(length(initial_weights), ncol(x) + 1))
 
-
+  # re-scale by n
   weight_elimnation <- weight_elimination/length(y)
 
   weights <- initial_weights
@@ -415,6 +399,7 @@ rollify_dbl <- function(f, window_sizes, fill = NA) {
 #' returns a tibble with columns
 #' \describe{
 #'     \item{window}{The window of entries before the current entry}
+#'     \item{current_value}{The current entry (last value in the window)}
 #'     \item{next_value}{The entry after the current window}
 #'     \item{next_index}{The index of next_value}
 #' }
@@ -461,7 +446,13 @@ get_windows <- function(values, window_size, include_missing = FALSE) {
 
   tibble::tibble(next_index = first_index:last_index,
                  window = purrr::map(next_index, get_window),
+                 current_value = values[next_index-1],
                  next_value = values[next_index])
 }
+
+
+
+
+
 
 

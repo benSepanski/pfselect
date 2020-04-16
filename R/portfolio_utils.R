@@ -95,21 +95,18 @@ compute_prices_from_relatives <- function(price_relatives, initial_price,
   # type and dimension checks
   if(.check_input) {
     assert_that(is_numeric_vector(price_relatives))
-    assert_that(all(price_relatives >= 0))
     assert_that(rlang::is_scalar_double(initial_price))
   }
   cumprod(c(initial_price, price_relatives))
 }
 
-#' Compute a price matrix from a price relatives matrix
-#'
-#' Computes a matrix of prices from a matrix
-#' of price relatives, where each column represents an asset
-#'
 #' @describeIn compute_prices_from_relatives
 #'
-#' @inheritParams compute_prices_from_relatives  # .check_input
-#' @inheritParams .backtest_strategy_template    # price_relative_matrix
+#' Computes a matrix of prices from a matrix
+#' of price relatives, where each column represents an asset.
+#' Output has same column names as \code{price_relative_matrix}
+#'
+#' @eval backtest_strategy_args()
 #' @param initial_prices A vector holding the initial prices of
 #'     each asset \eqn{i}
 #'
@@ -121,7 +118,7 @@ compute_price_matrix_from_relatives <- function(price_relative_matrix,
                                                 initial_prices,
                                                 .check_input = TRUE) {
   if(.check_input) {
-    validate_nonnegative_matrix(price_relative_matrix)
+    assert_that(is_numeric_matrix(price_relative_matrix))
     assert_that(is_numeric_vector(initial_prices))
   }
   price_relative_matrix %>%
@@ -130,7 +127,8 @@ compute_price_matrix_from_relatives <- function(price_relative_matrix,
                 compute_prices_from_relatives,
                 .check_input = .check_input) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(price_relative_matrix))
+    matrix(ncol = ncol(price_relative_matrix)) %>%
+    `colnames<-`(colnames(price_relative_matrix))
 }
 
 #' Return historical price means computed with decay factor
@@ -154,7 +152,6 @@ compute_historical_price_means <- function(prices, decay_factor = 0.5,
                                            .check_input = TRUE) {
   if(.check_input) {
     assert_that(is_numeric_vector(prices))
-    assert_that(all(prices >= 0))
     assert_that(rlang::is_scalar_double(decay_factor))
     assert_that(0 <= decay_factor && decay_factor <= 1)
   }
@@ -162,14 +159,12 @@ compute_historical_price_means <- function(prices, decay_factor = 0.5,
 }
 
 
-#' Compute a historical price matrix from a price matrix
-#'
-#' Computes a matrix of historical price means from a matrix
-#' of prices, where each column represents an asset
-#'
 #' @describeIn compute_historical_price_means
 #'
-#' @inheritParams compute_historical_price_means # .check_input, decay_factor
+#' Computes a matrix of historical price means from a matrix
+#' of prices, where each column represents an asset.
+#' Ouptut has same column names as \code{price_matrix}
+#'
 #' @param price_matrix A matrix of prices, where each row represents
 #'     a trading period and each column represents an asset
 #'
@@ -180,13 +175,14 @@ compute_historical_price_mean_matrix <- function(price_matrix,
                                                  decay_factor = 0.5,
                                                  .check_input = TRUE) {
   if(.check_input) {
-    validate_nonnegative_matrix(price_matrix)
+    assert_that(is_numeric_matrix(price_matrix))
   }
   price_matrix %>%
     purrr::array_branch(2L) %>%
     purrr::map(compute_historical_price_means, .check_input = .check_input) %>%
     purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(price_matrix))
+    matrix(ncol = ncol(price_matrix)) %>%
+    `colnames<-`(colnames(price_matrix))
 }
 
 
@@ -224,7 +220,6 @@ price_adjusted_portfolio <- function(portfolio, tp_price_relatives,
   # some type checks
   if(.check_input) {
     assert_that(is_numeric_vector(tp_price_relatives))
-    assert_that(all(tp_price_relatives >= 0))
     validate_portfolio(portfolio, length(tp_price_relatives))
   }
   # return the adjusted portfolio

@@ -1,24 +1,31 @@
-#' Generic backtest strategies documentation
-#'
-#' Basic parameters and return type for strategies
-#'
-#' @param price_relative_matrix a matrix of price relatives, each row
-#'     representing a trading period and each column an asset.
-#'     A price relative is \eqn{p_{t+1} / p_t}, i.e.
-#'     the ratio of trading price to next price. Prices change
-#'     according to the price relatives after the trade,
-#'     i.e. the price relatives for the trading period are not known
-#'     at trading time
-#' @param transaction_rate The percentage of each transaction (buy and sell)
-#'     spent on broker fees
-#' @return a matrix with the same number of columns and one more
-#'      row than \code{price_relative_matrix}, row \eqn{i}
-#'      is the portfolio after a trade during period \eqn{i}, i.e.
-#'      right before the \eqn{i}th price relatives change the prices.
-#' @docType
-#'
-#' @noRd
-.backtest_strategy_template <- function() {assert(FALSE)}
+
+# Roxygen help ------------------------------------------------------------
+
+
+backtest_strategy_return <- function() {
+  c("@return a matrix with the same number of columns and one more",
+    "row than \\code{price_relative_matrix}, row \\eqn{i}",
+    "is the portfolio after a trade during period \\eqn{i}, i.e.",
+    "right before the \\eqn{i}th price relatives change the prices."
+  )
+}
+backtest_strategy_args <- function() {
+  c("@param price_relative_matrix a matrix of price relatives, each row",
+    "representing a trading period and each column an asset.",
+    "A price relative is \\eqn{p_{t+1} / p_t}, i.e.",
+    "the ratio of trading price to next price. Prices change",
+    "according to the price relatives after the trade,",
+    "i.e. the price relatives for the trading period are not known",
+    "at trading time",
+    "@param transaction_rate The percentage of each transaction (buy and sell)",
+    "spent on broker fees"
+  )
+}
+
+
+# Input Checking ----------------------------------------------------------
+
+
 
 #' checks input args to a strategy
 #'
@@ -26,7 +33,7 @@
 #' and if a column hits zero it stays zero.
 #' asserts that transaction rate is a scalar double in \eqn{[0,1]}
 #'
-#' @inheritParams _backtest_strategy_template
+#' @eval backtest_strategy_args()
 #' @return Invisibly \code{TRUE}
 #'
 #' @importFrom assertthat assert_that
@@ -56,8 +63,8 @@ check_strategy_args <- function(price_relative_matrix, transaction_rate) {
 
 #' backtest a buy and hold strategy
 #'
-#' @inheritParams .backtest_strategy_template
-#' @inherit .backtest_strategy_template return
+#' @eval backtest_strategy_args()
+#' @eval backtest_strategy_return()
 #'
 #' @param initial_portfolio a vector whose \eqn{i}th entry is the
 #'     amount of wealth in the \eqn{i}th entry. Should
@@ -191,7 +198,7 @@ check_LOAD_args <- function(price_relative_matrix,
 #'
 #' @note NO TYPE CHECKING IS PERFORMED... be careful
 #'
-#' @inheritParams predict_price_momentum_LOAD
+#' @inheritParams predict_window_momentum_LOAD
 #' @param historic_mean The historic mean of the prices
 #' @return the predicted next price
 #'
@@ -199,9 +206,9 @@ predict_price_LOAD <- function(prev_prices,
                                historic_mean,
                                regularization_factor,
                                momentum_threshold) {
-  predicted_momentum <- predict_price_momentum_LOAD(prev_prices,
-                                                    regularization_factor,
-                                                    momentum_threshold)
+  predicted_momentum <- predict_window_momentum_LOAD(prev_prices,
+                                                     regularization_factor,
+                                                     momentum_threshold)
   if(predicted_momentum == 1) {
     return( max(prev_prices) )
   }
@@ -224,8 +231,8 @@ predict_price_LOAD <- function(prev_prices,
 #'
 #' Initial portfolio is uniform.
 #'
-#' @inherit .backtest_strategy_template return
-#' @inheritParams .backtest_strategy_template
+#' @eval backtest_strategy_return()
+#' @eval backtest_strategy_args()
 #' @param decay_factor \eqn{\alpha} in the referenced paper, LOAD predicts
 #'     that stocks regressing to the mean have approximate price
 #'     \eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}
@@ -346,8 +353,8 @@ backtest_LOAD <- function(price_relative_matrix,
 #' @param learning_rate The learning rate (\eqn{\eta} in the referenced
 #'     paper), a higher learning rate corresponds to a higher
 #'     sensitivitiy as one would expect.
-#' @inheritParams .backtest_strategy_template
-#' @inherit .backtest_strategy_template return
+#' @eval backtest_strategy_args()
+#' @eval backtest_strategy_return()
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom magrittr %>%
@@ -403,8 +410,8 @@ backtest_exponential_gradient <- function(price_relative_matrix,
 #'
 #' initializes to uniform portfolio
 #'
-#' @inheritParams .backtest_strategy_template
-#' @inherit .backtest_strategy_templtae return
+#' @eval backtest_strategy_args()
+#' @eval backtest_strategy_return()
 #'
 #' @importFrom magrittr %>%
 #'
@@ -475,8 +482,8 @@ backtest_online_newton_step <- function(price_relative_matrix,
 #'     computed without consider transaction costs. If \code{TRUE},
 #'     follows Blum & Kalai's 1991 paper and considers the transaction
 #'     costs.
-#' @inheritParams .backtest_strategy_template
-#' @inherit .backtest_strategy_template return
+#' @eval backtest_strategy_args()
+#' @eval backtest_strategy_return()
 #'
 #' @importFrom magrittr %>%
 #'

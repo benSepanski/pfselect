@@ -5,46 +5,50 @@
 \title{Test momentum prediction using LOAD strategy}
 \usage{
 predict_momentum_LOAD(
-  decay_factor,
+  aggregated_momentum_data,
   regularization_factor,
-  time_window,
   momentum_threshold,
-  prices
+  max_cv_window = NULL,
+  momentum_colname = "nonnegative_momentum"
 )
 }
 \arguments{
-\item{decay_factor}{\eqn{\alpha} in the referenced paper, LOAD predicts
-that stocks regressing to the mean have approximate price
-\eqn{MA_t = \alpha p_t + (1-\alpha)MA_{t-1}}, \eqn{MA_1 = p_1}}
+\item{aggregated_momentum_data}{A tibble
+of class \code{@eval{AGG_WINDOW_CLASS_NAME}} as returned from
+\code{\link{aggregate_price_and_mean_windows}}, with an
+added column of column name \code{momentum_colname}
+holding the momentum.}
 
-\item{regularization_factor}{\eqn{\lambda} in the referenced paper,
-the regularization coeffecient for weight decay when
-regressing the prices in the recent time window.
-Must be non-negative}
+\item{regularization_factor}{A regularization factor used in the
+LOAD prediction, if a vector then cross-validates
+(at each step choosing the factor that had the
+least error over previous time, random first time)}
 
-\item{time_window}{\eqn{w} in the referenced paper.
-The number of trading periods (including
-the most recent) to regress on (must be at least 2)}
+\item{momentum_threshold}{The threshold to be classified as
+with momentum. If a vector then cross-validates.
+(at each step choosing the factor that had the
+least error over previous time, random first time)}
 
-\item{momentum_threshold}{\eqn{\eta} in the referenced paper.
-If the regressed slope is greater than \eqn{\eta} we say the
-stock has momentum. This must be greater than 0.}
+\item{max_cv_window}{If \code{NULL} then checks over all
+past error, otherwise only checks the past \code{max_cv_window}
+time steps to determine error.}
 
-\item{prices}{The prices during the trading periods (a matrix
-with one more row than \code{price_relatives}).}
-
-\item{price_means}{The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
-+ \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
-same size as \code{prices}.}
+\item{momentum_colname}{The name of the column holding the
+true momentum values (as a string),
+defaults to \code{"nonnegative_momentum"}.}
 }
 \value{
-A ntime_periods x nassets matrix, with each entry
-    LOAD's predicted momentum for that time period (i.e.
-    before seeing that time period) or NA
+\code{aggregated_momentum_data}
+    with added columns:
+    \code{LOAD_prediction} holding LOAD's predicted
+    momentum for that time, \code{regularization_factor}
+    holding the regularization factor used in that prediction,
+    \code{momentum_threshold} holding the
+    momentum threshold used in that prediction.
 }
 \description{
 Test LOAD's strategy of predicting momentum. Returns
 each momentum prediction.
-See \code{\link{evaluate_momentum}} for a description
+See \code{\link{evaluate_momentum_at_window}} for a description
 of momentum
 }

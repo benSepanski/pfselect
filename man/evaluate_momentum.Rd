@@ -2,40 +2,33 @@
 % Please edit documentation in R/momentum_data.R
 \name{evaluate_momentum}
 \alias{evaluate_momentum}
-\title{Evaluate momentum of the price}
+\title{Evaluates momentum on aggregated windows}
 \usage{
 evaluate_momentum(
-  price_window,
-  next_price,
-  historic_price_mean,
+  agg_windows,
+  momentum_window_size,
   consider_negative_momentum = TRUE
 )
 }
 \arguments{
-\item{price_window}{of asset in period \eqn{t-\tau+1,...t}}
+\item{agg_windows}{The \code{@eval{AGG_WINDOW_CLASS_NAME}} object
+as returned from \code{\link{aggregate_price_and_mean_windows}}}
 
-\item{next_price}{price of asset in period \eqn{t+1}}
-
-\item{historic_price_mean}{historic price mean at period \eqn{t}.
-For some \eqn{\alpha\in[0,1]}, the historic price mean
-is \eqn{MA_t = \alpha p_t + (1-\alpha) MA_{t-1}}, with
-\eqn{MA_1 = p_1}.}
+\item{momentum_window_size}{The size of the window used to determine
+momentum. Must be at least 2 and no longer than
+the price windows in \code{agg_windows}. Defaults to the
+length of the price windows in \code{agg_windows}.}
 
 \item{consider_negative_momentum}{If \code{FALSE}, then
 does not consider -1 as an option for momentum, i.e.
 only checks historic mean and max of previous prices}
 }
 \value{
-the momentum defined in the description
+An integer array whose \eqn{i}th entry holds the momentum
+    corresponding to the \eqn{i}th row of \code{agg_windows}.
 }
 \description{
-We propose three estimators for the next price, and define
-its momentum by whichever is closest:
-the max of previous prices is momentum +1, the min of previous
-prices is momentum -1, and the historical mean is momentum 0
-}
-\details{
-Note that this definition of momentum is scale-invariant, i.e.
-if all the prices are scaled (and the historic price means
-computed on these scaled prices) the momentum results are identical.
+Given a \code{@eval{AGG_WINDOW_CLASS_NAME}} object as returned
+from \code{\link{aggregate_price_and_mean_windows}}, computes
+the momentum at each window (as in \code{evaluate_momentum_at_window})
 }

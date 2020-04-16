@@ -6,6 +6,24 @@
 \usage{
 backtest_online_newton_step(price_relative_matrix, transaction_rate)
 }
+\arguments{
+\item{price_relative_matrix}{a matrix of price relatives, each row
+representing a trading period and each column an asset.
+A price relative is \eqn{p_{t+1} / p_t}, i.e.
+the ratio of trading price to next price. Prices change
+according to the price relatives after the trade,
+i.e. the price relatives for the trading period are not known
+at trading time}
+
+\item{transaction_rate}{The percentage of each transaction (buy and sell)
+spent on broker fees}
+}
+\value{
+a matrix with the same number of columns and one more
+row than \code{price_relative_matrix}, row \eqn{i}
+is the portfolio after a trade during period \eqn{i}, i.e.
+right before the \eqn{i}th price relatives change the prices.
+}
 \description{
 Backtests using an online newton step method for portfolio
 selection.

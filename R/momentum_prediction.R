@@ -1,44 +1,4 @@
 
-#' Compute a confusion matrix for price momentum
-#'
-#' Given prices and historical price means, as well as predicted momenta,
-#' produce a confusion matrix for the momentum
-#'
-#' @inheritParams predict_momentum_LOAD
-#' @inheritParams evaluate_momentum
-#' @param predicted_momentum A matrix the same dimension as prices
-#'     holding the predicted momentum or NA
-#'
-#' @return A tibble holding the entries of
-#'     a confusion matrix for the momentum
-#'
-#' @importFrom magrittr %>%
-#'
-#' @export
-momentum_confusion_table <- function(prices,
-                                     historic_price_means,
-                                     time_window,
-                                     predicted_momentum,
-                                     consider_negative_momentum = TRUE) {
-
-  prices %>%
-    get_all_previous_price_windows(time_window) %>%
-    dplyr::mutate(hpm = historic_price_means[matrix(c(trading_period, asset),
-                                                    ncol = 2)
-                                             ]) %>%
-    dplyr::transmute(
-      predicted = predicted_momentum[trading_period],
-      actual = purrr::pmap_dbl(
-        list(previous_price_window, price, hpm),
-        evaluate_momentum,
-        consider_negative_momentum = consider_negative_momentum)
-      ) %>%
-    tidyr::drop_na() %>%
-    dplyr::group_by(predicted, actual) %>%
-    dplyr::count()
-}
-
-
 # LOAD --------------------------------------------------------------------
 
 
@@ -48,7 +8,7 @@ momentum_confusion_table <- function(prices,
 #'  given previous prices according to LOAD
 #' strategy (see paper mentioned in description of
 #' \code{\link{backtest_LOAD}}), momentu is defined in
-#' \code{\link{evaluate_momentum}}.
+#' \code{\link{evaluate_momentum_at_window}}.
 #'
 #' @note NO TYPE CHECKING IS PERFORMED... be careful
 #'
@@ -60,10 +20,10 @@ momentum_confusion_table <- function(prices,
 #'
 #' @importFrom glmnet glmnet
 #'
-predict_price_momentum_LOAD <- function(prev_prices,
-                                        regularization_factor,
-                                        momentum_threshold,
-                                        min_var = .Machine$double.eps ^ 0.5) {
+predict_window_momentum_LOAD <- function(prev_prices,
+                                         regularization_factor,
+                                         momentum_threshold,
+                                         min_var = .Machine$double.eps ^ 0.5) {
   regularized_slope <- 0
   # avoid constant case
   if(var(prev_prices) > min_var) {
@@ -76,7 +36,7 @@ predict_price_momentum_LOAD <- function(prev_prices,
              lambda = regularization_factor)$beta)
   }
   # mom is 1 if growing faster than momentum threshold
-  as.numeric(regularized_slope > momentum_threshold)
+  as.integer(regularized_slope > momentum_threshold)
 }
 
 
@@ -84,39 +44,102 @@ predict_price_momentum_LOAD <- function(prev_prices,
 #'
 #' Test LOAD's strategy of predicting momentum. Returns
 #' each momentum prediction.
-#' See \code{\link{evaluate_momentum}} for a description
+#' See \code{\link{evaluate_momentum_at_window}} for a description
 #' of momentum
 #'
-#' @param prices The prices during the trading periods (a matrix
-#'     with one more row than \code{price_relatives}).
-#' @param price_means
-#'     The mean price \eqn{MA_t} is \code{decay_factor} * \eqn{p_t}
-#'     + \code{(1-decay_factor)} * \eqn{MA_{t-1}}, a matrix the
-#'     same size as \code{prices}.
+#' @param regularization_factor A regularization factor used in the
+#'     LOAD prediction, if a vector then cross-validates
+#'     (at each step choosing the factor that had the
+#'     least error over previous time, random first time)
+#' @param momentum_threshold The threshold to be classified as
+#'     with momentum. If a vector then cross-validates.
+#'     (at each step choosing the factor that had the
+#'     least error over previous time, random first time)
+#' @param aggregated_momentum_data A tibble
+#'     of class \code{@eval{AGG_WINDOW_CLASS_NAME}} as returned from
+#'     \code{\link{aggregate_price_and_mean_windows}}, with an
+#'     added column of column name \code{momentum_colname}
+#'     holding the momentum.
+#' @param max_cv_window If \code{NULL} then checks over all
+#'     past error, otherwise only checks the past \code{max_cv_window}
+#'     time steps to determine error.
+#' @param momentum_colname The name of the column holding the
+#'     true momentum values (as a string),
+#'     defaults to \code{"nonnegative_momentum"}.
 #'
-#' @return A ntime_periods x nassets matrix, with each entry
-#'     LOAD's predicted momentum for that time period (i.e.
-#'     before seeing that time period) or NA
+#' @return \code{aggregated_momentum_data}
+#'     with added columns:
+#'     \code{LOAD_prediction} holding LOAD's predicted
+#'     momentum for that time, \code{regularization_factor}
+#'     holding the regularization factor used in that prediction,
+#'     \code{momentum_threshold} holding the
+#'     momentum threshold used in that prediction.
 #'
-#' @inheritParams backtest_LOAD
-#'
+#' @importFrom assertthat assert_that
 #' @importFrom magrittr %>%
 #'
 #' @export
-predict_momentum_LOAD <- function(decay_factor,
+predict_momentum_LOAD <- function(aggregated_momentum_data,
                                   regularization_factor,
-                                  time_window,
                                   momentum_threshold,
-                                  prices) {
-  # now get momentum for each asset at each time
-  prices %>%
-    purrr::array_branch(2L) %>%
-    purrr::map(rollify_dbl(predict_price_momentum_LOAD,
-                           window_sizes = time_window),
-               regularization_factor = regularization_factor,
-               momentum_threshold = momentum_threshold) %>%
-    purrr::flatten_dbl() %>%
-    matrix(ncol = ncol(prices))
+                                  max_cv_window = NULL,
+                                  momentum_colname = "nonnegative_momentum") {
+  # type checks
+  assert_that(inherits(aggregated_momentum_data, AGG_WINDOW_CLASS_NAME))
+  assert_that(rlang::has_name(aggregated_momentum_data, momentum_colname))
+  assert_that(rlang::is_double(regularization_factor))
+  assert_that(all(regularization_factor >= 0))
+  assert_that(rlang::is_double(momentum_threshold))
+  assert_that(all(momentum_threshold >= 0))
+  assert_that(is.null(max_cv_window) || is_whole_number(max_cv_window))
+  assert_that(rlang::is_scalar_character(momentum_colname))
+
+  if(is.null(max_cv_window)) {
+    max_cv_window <- nrow(aggregated_momentum_data)
+  }
+
+  # First we will just compute predictions for all, then we'll
+  # go back and "pick the one we would have chosen"
+  tb <- aggregated_momentum_data
+  # get all predictions possible
+  all_predictions <- list(reg = regularization_factor,
+                          mom = momentum_threshold) %>%
+    purrr::cross_df() %>%
+    dplyr::group_by(reg, mom) %>%
+    dplyr::group_modify(
+      ~tibble::tibble(
+        predictions = purrr::map_int(pull(tb, price_window),
+                                     predict_window_momentum_LOAD,
+                                     regularization_factor = pull(.y, reg),
+                                     momentum_threshold = pull(.y, mom)),
+        trading_period = pull(tb, trading_period),
+        asset = pull(tb, asset),
+        error = pull(tb, !! enquo(nonnegative_momentum)) != predictions)
+    ) %>%
+    dplyr::ungroup()
+  # Determine which ones would have been selected at each stage
+  selected_predictions <- all_predictions %>%
+    dplyr::group_by(reg, mom, trading_period) %>%
+    dplyr::summarise(trading_period_err = mean(error)) %>%
+    dplyr::ungroup(trading_period) %>%
+    dplyr::arrange(trading_period) %>%
+    dplyr::mutate(
+      cum_err = cumsum(trading_period_err) - trading_period_err,
+      cv_err = cum_err - dplyr::lag(cum_err, n = max_cv_window, default = 0),
+      trading_period_err = NULL,
+      cum_err = NULL) %>%
+    dplyr::ungroup(reg, mom) %>%
+    dplyr::group_by(trading_period) %>%
+    dplyr::top_n(1, desc(cv_err)) %>%
+    dplyr::sample_n(1) %>%
+    dplyr::ungroup(trading_period) %>%
+    dplyr::select(-cv_err) %>%
+    dplyr::left_join(all_predictions, by = c("reg", "mom", "trading_period"))%>%
+    dplyr::left_join(aggregated_momentum_data, by = c("trading_period", "asset")) %>%
+    dplyr::rename(LOAD_regularization_factor = reg,
+                  LOAD_momentum_threshold = mom,
+                  LOAD_prediction = predictions,
+                  LOAD_error = error)
 }
 
 

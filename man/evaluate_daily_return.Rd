@@ -6,19 +6,19 @@
 \title{Computes the daily increase in wealth}
 \usage{
 evaluate_daily_return(
-  price_relatives,
+  price_relative_matrix,
   portfolios_after_trade,
   transaction_rate
 )
 
 evaluate_cumulative_wealth(
-  price_relatives,
+  price_relative_matrix,
   portfolios_before_trade,
   transaction_rate
 )
 }
 \arguments{
-\item{price_relatives}{A T x n matrix of price relatives}
+\item{price_relative_matrix}{A T x n matrix of price relatives}
 
 \item{portfolios_after_trade}{a T x n matrix of the portfolios
 after the trade (an entry in a portfolio is the portion
