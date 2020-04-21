@@ -22,5 +22,7 @@ Imports:
     httr,
     glmnet,
     tibble,
-    tidyr
+    tidyr,
+    nnet,
+    tidyselect
 RoxygenNote: 7.1.0

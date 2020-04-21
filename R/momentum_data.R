@@ -1,4 +1,5 @@
 
+
 # Price and mean windows --------------------------------------------------
 
 AGG_WINDOW_CLASS_NAME <- "pfselect_aggregated_windows"
@@ -262,6 +263,71 @@ evaluate_momentum <- function(agg_windows,
                     consider_negative_momentum = consider_negative_momentum)
 }
 
+#' Evaluate momentum price prediction
+#'
+#' Give the price predicted by the momentum.
+#'
+#' @param aggregated_momentum_data A tibble
+#'     of class \code{@eval{AGG_WINDOW_CLASS_NAME}} as returned from
+#'     \code{\link{aggregate_price_and_mean_windows}}, with an
+#'     added column of column name \code{momentum_colname}
+#'     holding the momentum.
+#' @param momentum_colname The name of the column holding the
+#'     true momentum values (as a string),
+#'     defaults to \code{"momentum"}.
+#' @param consider_negative_momentum \code{TRUE} to treat momentum as
+#'     possibly negative, otherwise assumed to be nonnegative
+#'     (see \code{\link{evaluate_momentum_at_window}()})
+#'
+#' @return A column vector whose \eqn{i}th entry is the predicted
+#'     price for the \eqn{i}th row, using the predicted momentum
+#'     as a guide.
+#'
+#' @importFrom assertthat assert_that has_name
+#' @export
+evaluate_momentum_predict_price <- function(agg_windows,
+                                            momentum_colname = "momentum",
+                                            consider_negative_momentum = TRUE) {
+  # type checks
+  assert_that(inherits(agg_windows, AGG_WINDOW_CLASS_NAME))
+  assert_that(rlang::is_scalar_character(momentum_colname))
+  assert_that(has_name(agg_windows, momentum_colname))
+  assert_that(rlang::is_scalar_logical(consider_negative_momentum))
+  assert_that(any(consider_negative_momentum == c(TRUE, FALSE)))
+  # now do the predictions
+  if(consider_negative_momentum) {
+    price_predictor <- function(price_window, historic_price_mean, momentum) {
+      if(any(is.na(c(price_window, historic_price_mean, momentum)))) {
+        return(NA)
+      }
+      if(momentum == 1L) {
+        return(max(price_window))
+      }
+      else if(momentum == -1L) {
+        return(min(price_window))
+      }
+      historic_price_mean
+    }
+  }
+  else {
+    price_predictor <- function(price_window, historic_price_mean, momentum) {
+      if(any(is.na(c(price_window, historic_price_mean, momentum)))) {
+        return(NA)
+      }
+      if(momentum == 1L) {
+        return(max(price_window))
+      }
+      historic_price_mean
+    }
+  }
+
+  agg_windows %>%
+    dplyr::select(price_window,
+                  historic_price_mean,
+                  !!enquo(momentum_colname)) %>%
+    dplyr::rename(momentum = !!enquoe(momentum_colname)) %>%
+    purrr::pmap_dbl(price_predictor)
+}
 
 
 

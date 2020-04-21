@@ -9,7 +9,7 @@ predict_momentum_LOAD(
   regularization_factor,
   momentum_threshold,
   max_cv_window = NULL,
-  momentum_colname = "nonnegative_momentum"
+  momentum_colname = "momentum"
 )
 }
 \arguments{
@@ -35,7 +35,8 @@ time steps to determine error.}
 
 \item{momentum_colname}{The name of the column holding the
 true momentum values (as a string),
-defaults to \code{"nonnegative_momentum"}.}
+defaults to \code{"momentum"}. Should be nonnegative momentum
+values (see \code{\link{evaluate_momentum_at_window}})}
 }
 \value{
 \code{aggregated_momentum_data}
