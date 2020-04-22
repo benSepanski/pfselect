@@ -115,7 +115,7 @@ predict_momentum_LOAD <- function(aggregated_momentum_data,
                                      momentum_threshold = pull(.y, mom)),
         trading_period = pull(tb, trading_period),
         asset = pull(tb, asset),
-        error = pull(tb, !! enquo(nonnegative_momentum)) != predictions)
+        error = pull(tb, !! enquo(momentum_colname)) != predictions)
     ) %>%
     dplyr::ungroup()
   # Determine which ones would have been selected at each stage
@@ -170,7 +170,8 @@ predict_momentum_LOAD <- function(aggregated_momentum_data,
 #'    uses linear regression
 #'
 #' @return perceptron weights (bias, weights) where
-#'     \eqn{y ~ bias + x * weights}
+#'     \eqn{y ~ bias + x * weights}. Attribute \code{"niter"}
+#'     holds the iteration count
 #'
 #' @importFrom assertthat assert_that are_equal
 #' @importFrom stats lsfit
@@ -188,20 +189,34 @@ regularized_pocket <- function(x, y,
   assert_that(rlang::is_scalar_double(weight_elimination))
   assert_that(is_whole_number(maxit))
   assert_that(maxit > 0)
-  assert_that(rlang::is_vector(initial_weights))
   if(all( !is.null(initial_weights) )) {
     assert_that(rlang::is_double(initial_weights, n = ncol(x)+1, finite = TRUE))
+    assert_that(all( !is.na(initial_weights)))
   }
   else {
-    assert_that(rlang::is_scalar_atomic(initial_weights))
-    assert_that(is.null(initial_weights))
+    assert_that(all(is.null(initial_weights)))
   }
 
+  ## NOTE: In the documentation, for initial_weights, in the returne weights,
+  #        and in standard notation the first component of the weights is
+  #        the bias. However, for ease of computation, we split
+  #        the bias and weights in the INTERNALS ONLY of this function.
+
   # initialize weights with linear regression if NULL
-  if(is.null(weights)) {
-    least_squares_sol <- lsfit(x = x, y = y)
-    bias <- least_squares_sol$coef[1]
-    weights <- least_squares_sol$coef[-1]
+  if(is.null(initial_weights)) {
+    if(nrow(x) > ncol(x)) {
+      least_squares_sol <- lsfit(x = x, y = y)
+      bias <- least_squares_sol$coef[1]
+      weights <- least_squares_sol$coef[-1]
+    }
+    else {
+      bias <- rnorm(1, sd = 0.05)
+      weights <- rnorm(ncol(x), sd = 0.05)
+    }
+  }
+  else {
+    bias <- initial_weights[1]
+    weights <- initial_weights[-1]
   }
   # Begin PLA
   lambda <- weight_elimination / nrow(x)
@@ -210,22 +225,28 @@ regularized_pocket <- function(x, y,
   iter <- 1
   while(error > 0 && iter <= maxit) {
     iter <- iter + 1
+    # Get PLA update
     star <- sample(which(misclassified), 1)
-    # get new weights
-    new_weights <- weights + y[start] * x[star, ]
-    new_weights <- new_weights - lambda * weights / (1 + weights^2)^2
-    new_bias <- bias + y[star]
-    # if new weights are better, use them!
-    new_misclassified <- sign(new_bias + x %*% new_weights) != y
-    new_error <- mean(new_misclassified)
-    if(new_error < error) {
-      weights <- new_weights
-      bias <- new_bias
-      misclassified <- new_misclassified
-      error <- new_error
+    pla_update <- c(y[star], y[star] * x[star,])
+    # Get shrinking update
+    shrink_update <- c(0, -lambda * weights / (1 + weights^2)^2)
+    for(update in list(pla_update, shrink_update)) {
+      new_weights <- weights + update[-1]
+      new_bias <- bias + update[1]
+      # if new weights are better, use them!
+      new_misclassified <- sign(new_bias + x %*% new_weights) != y
+      new_error <- mean(new_misclassified)
+      if(new_error <= error) {
+        weights <- new_weights
+        bias <- new_bias
+        misclassified <- new_misclassified
+        error <- new_error
+      }
     }
   }
-  c(bias, weights)
+  weights <- c(bias, weights)
+  attr(weights, "niter") <- iter
+  weights
 }
 
 
@@ -258,18 +279,17 @@ regularized_pocket <- function(x, y,
 #'     past, whichever is selected)
 #'
 #' @return A tibble like \code{data} but with a \code{pocket_prediction}
-#'     \code{pocket_error}, and \code{pocket_elimination_weight},
-#'     columns holding the momentum prediction,
+#'     \code{pocket_error}, and \code{pocket_weight_elimination},
+#'     columns holding the absolute value momentum prediction,
 #'     whether it was an error, and the elimination weight used.
 #'
 #' @importFrom magrittr %>%
 #' @export
 predict_momentum_pocket <- function(data,
                                     feature_colname,
-                                    momentum_colname = "momentum",
-                                    cv_assets,
                                     weight_elimination,
                                     maxit,
+                                    momentum_colname = "momentum",
                                     max_cv_window = NULL) {
   # type checks
   # TODO Check feature columns don't already exist
@@ -279,33 +299,32 @@ predict_momentum_pocket <- function(data,
   assert_that(rlang::has_name(data, feature_colname))
   assert_that(!rlang::has_name(data, "pocket_prediction"))
   assert_that(!rlang::has_name(data, "pocket_error"))
-  assert_that(!rlang::has_name(data, "pocket_elimination_weight"))
+  assert_that(!rlang::has_name(data, "pocket_weight_elimination"))
+  assert_that(!rlang::has_name(data, "pocket_feature_index"))
   assert_that(rlang::is_double(weight_elimination))
   assert_that(is.null(max_cv_window) || is_whole_number(max_cv_window))
   assert_that(rlang::is_scalar_character(feature_colname))
   assert_that(rlang::is_scalar_character(momentum_colname))
-  assert_that(rlang::is_vector(cv_assets))
   assert_that(is_whole_number(maxit))
 
   if(is.null(max_cv_window)) {
     max_cv_window <- nrow(data)
   }
-  # Some abbrev for in quotes
-  feature <- enquo(feature_colname)
-  momentum <- enquo(momentum_colname)
   # Spread out features into columns
+  momentum <- enquo(momentum_colname)
   spread_data <- data %>%
-    tidyr::unnest(!!feature) %>%
+    tidyr::unnest(!!feature_colname) %>%
     dplyr::group_by(trading_period, asset) %>%
-    dplyr::mutate(
-      feature = glue::glue("pocket_feature_{seq_along(!! feature)}")) %>%
-    tidyr::pivot_wider(names_from = feature, values_from = !!feature) %>%
+    dplyr::mutate(pocket_feature_index = as.character(
+      glue::glue("pocket_feature_{1:n()}"))) %>%
+    tidyr::pivot_wider(names_from = pocket_feature_index,
+                       values_from = !!feature_colname) %>%
     dplyr::ungroup(trading_period, asset) %>%
+    dplyr::mutate(pm_one_momentum = sign(.data[[momentum_colname]] * 2 - 1)) %>%
     dplyr::select(trading_period,
                   asset,
-                  !!momentum,
-                  tidyselect::matches("pocket_feature_%d+")) %>%
-    dplyr::mutate(is_cv = asset %in% cv_assets)
+                  pm_one_momentum,
+                  tidyselect::matches("pocket_feature_\\d+"))
 
   # Get unique trading periods and assets
   trading_periods <- data %>%
@@ -313,47 +332,47 @@ predict_momentum_pocket <- function(data,
     dplyr::pull(trading_period)
   # Make big x and y
   y <- spread_data %>%
-    dplyr::pull(!!momentum) %>%
-    sign()
+    dplyr::pull(pm_one_momentum)
   x <- spread_data %>%
-    dplyr::select(tidyselect::matches("pocket_feature_%d+")) %>%
+    dplyr::select(tidyselect::matches("pocket_feature_\\d+")) %>%
     as.matrix()
   # TODO Make sure more than 1 trading period
   # Store cumulative errors
   we_errors <- tibble::tibble(trading_period = trading_periods,
-                              errors = rep(0, length(weight_elimination)))
+                              errors = list(rep(0, length(weight_elimination)))
+                              )
   # To store all the results
   pocket_results <- spread_data %>%
     dplyr::select(trading_period, asset) %>%
     dplyr::mutate(pocket_prediction = NA,
                   pocket_error = NA,
-                  pocket_elimination_weight = NA)
+                  pocket_weight_elimination = NA)
   iter <- 1
   for(tp in trading_periods[-1]) {
     # pick out rows, and which weight elimination to use
-    prev_rows <- spread_data$trading_period < tp
-    tp_rows <- spread_data$trading_period == tp
+    prev_rows <- which(spread_data$trading_period < tp)
+    tp_rows <- which(spread_data$trading_period == tp)
     we_index <- nnet::which.is.max(-we_errors$errors[[iter]])
     # predict momentum
     predictions <- weight_elimination %>%
-      purrr::map(regularized_pocket,
-                 x = x[prev_rows, ],
-                 y = y[prev_rows],
-                 weight_elimination = .,
-                 maxit = maxit) %>%
+      purrr::map(~regularized_pocket(x = x[prev_rows, ],
+                                     y = y[prev_rows],
+                                     weight_elimination = .,
+                                     maxit = maxit)) %>%
       purrr::map(~sign(.[1] + x[tp_rows,] %*% .[-1]))
     # get correct values
     true_momentum <- spread_data %>%
       dplyr::slice(tp_rows) %>%
-      dplyr::pull(!!momentum)
+      dplyr::pull(pm_one_momentum)
     # evaluate errors for this trading period
     tp_errors <- predictions %>%
       purrr::map(~. != true_momentum)
     # Store results
-    pocket_results[tp_rows,]$pocket_prediction <- predictions[[we_index]]
-    pocket_results[tp_rows,]$pocket_weight_elimination <-
+    pocket_results$pocket_prediction[tp_rows] <- 0.5 * (
+      predictions[[we_index]] + 1)
+    pocket_results$pocket_weight_elimination[tp_rows] <-
       weight_elimination[we_index]
-    pocket_results[tp_rows,]$pocket_error <- tp_errors[[we_index]]
+    pocket_results$pocket_error[tp_rows] <- tp_errors[[we_index]]
 
     # update errors to possibly choose new coefficient next time
     we_errors$errors[[iter+1]] <- we_errors$errors[[iter]] +
@@ -376,38 +395,86 @@ predict_momentum_pocket <- function(data,
 # Price Rebasing =========================================================
 
 
-#' Rebase price relatives to new linear combination
+#' Rebase to new linear combination of assets
 #'
-#' Change the price relatives in trading period \eqn{i} to represent
-#' the price relatives of a
+#' Change the price windows and historic price mean windows
+#' in trading period \eqn{i} to represent a
 #' linear combination of prices, the \eqn{j}th combination being the \eqn{j}th
 #' column of the matrix which is the \eqn{i}th entry of \code{new_assets}.
 #'
-#' @param price_relative_matrix The matrix of price relatives
-#' @param new_assets A list, whose \eqn{i}th entry is a square matrix of size
-#'     \code{ncol(price_relative_matrix)}. Each column represents a new
-#'     linear combination of the assets to consider.
+#' @param agg_windows A tibble
+#'     of class \code{@eval{AGG_WINDOW_CLASS_NAME}} as returned from
+#'     \code{\link{aggregate_price_and_mean_windows}}
+#' @param new_assets A list, whose \eqn{i}th entry is a square matrix.
+#'     Each column represents a new
+#'     linear combination of the assets to consider replacing
+#'     one of the old assets.
+#' @param asset_rownames These are the names of the assets of
+#'     \code{agg_windows} in the order which they correspond to
+#'     the rows of the matrices in \code{new_assets}
+#' @param scalar_columns_to_rebase A character vector of
+#'     column names of \code{agg_windows} to be rebased. These
+#'     must be double columns.
 #'
-#' @return the new price relative matrix
+#' @return the new tibble with rebased values
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom utils head tail
 #' @export
-rebase_price_relative_matrix <- function(price_relative_matrix, new_assets) {
+rebase_agg_windows <- function(agg_windows,
+                               new_assets,
+                               asset_rownames,
+                               scalar_columns_to_rebase = NULL) {
   # type checks
-  assert_that(is_numeric_matrix(price_relative_matrix))
+  # TODO MORE type checking
+  # TODO check columns
+  assert_that(inherits(agg_windows, AGG_WINDOW_CLASS_NAME))
   assert_that(is.list(new_assets))
-  assert_that(length(new_assets) == nrow(price_relative_matrix))
-  # First get the price matrix
-  nassets <- ncol(price_relative_matrix)
-  price_matrix <- compute_price_matrix_from_relatives(price_relative_matrix,
-                                                      rep(1, nassets))
-  # Now do the price relatives of the rebased prices
-  list(head(price_matrix, -1), tail(price_matrix, -1), new_assets) %>%
-    purrr::map(array_branch, 1L) %>%
-    purrr::pmap((.x %*% .z) / (.y %*% .z)) %>%
-    purrr::flatten_dbl() %>%
-    matrix(byrow = TRUE, ncol = nassets)
+  assert_that(is.null(scalar_columns_to_rebase) ||
+              rlang::is_character(scalar_columns_to_rebase))
+  if(is.null(scalar_columns_to_rebase)) {
+    scalar_columns_to_rebase = list()
+  }
+  #
+  rebase_scalar <- function(tb, scalar_colname) {
+    # Assume tbl already ordered by (trading_period, asset)
+    new_col <- tb %>%
+      dplyr::pull(scalar_colname) %>%
+      matrix(byrow = TRUE, ncol = length(asset_rownames)) %>%
+      purrr::array_branch(1L) %>%
+      purrr::map2(new_assets, ~t(.x[asset_rownames]) %*% .y) %>%
+      purrr::flatten_dbl()
+    tb[[scalar_colname]] <- new_col
+    tb
+  }
+  # now rebase any requested scalars
+  agg_windows <- agg_windows %>%
+    dplyr::arrange(trading_period, asset)
+  for(colname in scalar_columns_to_rebase) {
+    agg_windows <- agg_windows %>% rebase_scalar(colname)
+  }
+  # Now rebase all the windows
+  for(window in c("price_window", "historic_price_mean_window")) {
+    window_col <- agg_windows %>%
+      dplyr::pull(window)
+    window_lengths <- map_dbl(window_col, length)
+    # Windows must all be same size for this to work
+    assert_that(min(window_lengths) == max(window_lengths))
+    # Repeatedly operate on ith entry inwindow
+    for(i in 1:min(window_lengths)) {
+      0
+      ith_scalar <- agg_windows %>%
+        dplyr::mutate(window_scalar_col = purrr::map_dbl(window_col, ~.[[i]])) %>%
+        rebase_scalar("window_scalar_col") %>%
+        dplyr::pull("window_scalar_col")
+      for(j in seq_along(ith_scalar)) {
+        window_col[[i]][j] <- ith_scalar[j]
+      }
+    }
+    agg_windows[[window]] <- window_col
+  }
+  # Return rebased tibble
+  agg_windows
 }
 
 #' Get eigenvalue decompositions for each time step
@@ -432,12 +499,11 @@ compute_price_relatives_eigen <- function(price_relative_matrix) {
   assert_that(nrow(price_relative_matrix) >= 3)
   # Now get all the eigen vectors, with identity thrown in for first one
   nassets <- ncol(price_relative_matrix)
+  id_decomp <- list(values = rep(1, nassets), vectors = diag(nassets))
   3:nrow(price_relative_matrix) %>%
     purrr::map(~cov(price_relative_matrix[1:(.-1), ])) %>%
     purrr::map(eigen, symmetric = TRUE) %>%
-    purrr::prepend(rep(list(values = rep(1, nassets),
-                            vectors = diag(nassets)),
-                       2)) %>%
+    purrr::prepend(list(id_decomp, id_decomp)) %>%
     purrr::transpose()
 }
 
@@ -459,9 +525,15 @@ compute_price_relatives_whitener <- function(price_relative_matrix) {
   # some type checks
   assert_that(is_numeric_matrix(price_relative_matrix))
   # Get all the eigen vectors and take negative square root of each one
+  neg_sqrt <- function(values, vectors) {
+    # if near zero may be negative
+    values[values > 0] <- sqrt(values[values > 0])
+    values[values > 1e-7] <- 1 / values[values > 1e-7]
+    vectors %*% diag(values) %*% t(vectors)
+  }
   price_relative_matrix %>%
     compute_price_relatives_eigen() %>%
-    purrr::pmap(~.y %*% diag(1 / sqrt(.x)) %*% t(.y))
+    purrr::pmap(neg_sqrt)
 }
 
 
@@ -470,29 +542,36 @@ compute_price_relatives_whitener <- function(price_relative_matrix) {
 #' Rescales windows to positive slope
 #'
 #' Rescales windows (\code{price_window} and \code{historic_price_mean_window})
-#' by \eqn{\pm 1} so that each \code{price_window} has positive
-#' correlation with 1,2,...,length(\code{price_window}).
+#' by \eqn{\pm 1} so that each the most recent price is greater than
+#' or equal to the most recen thistoric price mean.
 #'
 #' @param agg_windows a \code{@eval{AGG_WINDOW_CLASS_NAME} } instance
 #'     as returned from \code{\link{aggregate_price_and_mean_windows}}.
 #' @return \code{agg_windows} but modified to have an extra column
-#'     \code{cor_sign} which is the sign of the correlation
-#'     between each price window and time, as well as having rescaled
+#'     \code{flip_sign} which is -1 if the sign was flipped and 1 otherwise
+#'     as well as having rescaled
 #'     the \code{price_window} and \code{historic_price mean_window}
-#'     columns by \code{cor_sign}
+#'     columns by \code{flip_sign}
 #'
 #' @export
-rescale_to_positive_correlation <- function(agg_windows) {
+rescale_to_price_over_mean <- function(agg_windows) {
   # type check
   assert_that(inherits(agg_windows, AGG_WINDOW_CLASS_NAME))
   assert_that(!has_name(agg_windows, "cor_sign"))
   # Now make the cor sign
+  get_flip_sign <- function(price, historic_price_mean) {
+    s <- sign(price - historic_price_mean)
+    if(s == 0) {
+      s <- 1
+    }
+    s
+  }
   agg_windows %>%
     dplyr::mutate(
-      cor_sign = purrr::map_int(price_window, sign(cor(seq_along(.), .)) ),
-      price_windows = purrr::map2(price_windows, cor_sign, `*`),
+      flip_sign = purrr::map2_dbl(price, historic_price_mean, get_flip_sign),
+      price_window = purrr::map2(price_window, flip_sign, `*`),
       historic_price_mean_window = purrr::map2(historic_price_mean_window,
-                                               cor_sign,
+                                               flip_sign,
                                                `*`)
     )
 }

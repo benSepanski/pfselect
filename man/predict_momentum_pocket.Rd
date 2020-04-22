@@ -7,10 +7,9 @@
 predict_momentum_pocket(
   data,
   feature_colname,
-  momentum_colname = "momentum",
-  cv_assets,
   weight_elimination,
   maxit,
+  momentum_colname = "momentum",
   max_cv_window = NULL
 )
 }
@@ -24,16 +23,16 @@ holding the momentum.}
 \item{feature_colname}{The column name of the features to use.
 Should be a list column, each list entry holding a double vector.}
 
-\item{momentum_colname}{The name of the column holding the
-true momentum values (as a string),
-defaults to \code{"momentum"}. Should be (possibly negative) momentum
-values (see \code{\link{evaluate_momentum_at_window}})}
-
 \item{weight_elimination}{A double vector, at each stage picks the
 one which has performed best in the past cv window (or all of the
 past, whichever is selected)}
 
 \item{maxit}{the maximum number of iterations}
+
+\item{momentum_colname}{The name of the column holding the
+true momentum values (as a string),
+defaults to \code{"momentum"}. Should be (possibly negative) momentum
+values (see \code{\link{evaluate_momentum_at_window}})}
 
 \item{max_cv_window}{If \code{NULL} then checks over all
 past error, otherwise only checks the past \code{max_cv_window}
@@ -41,8 +40,8 @@ time steps to determine error.}
 }
 \value{
 A tibble like \code{data} but with a \code{pocket_prediction}
-    \code{pocket_error}, and \code{pocket_elimination_weight},
-    columns holding the momentum prediction,
+    \code{pocket_error}, and \code{pocket_weight_elimination},
+    columns holding the absolute value momentum prediction,
     whether it was an error, and the elimination weight used.
 }
 \description{

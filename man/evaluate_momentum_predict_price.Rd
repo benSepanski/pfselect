@@ -6,24 +6,30 @@
 \usage{
 evaluate_momentum_predict_price(
   agg_windows,
+  momentum_window_size,
   momentum_colname = "momentum",
-  consider_negative_momentum = TRUE
+  use_signed_momentum = TRUE
 )
 }
 \arguments{
+\item{momentum_window_size}{the size determining momentum,
+which must be at least 2 and is assumed
+to be at most the size of the price windows in \code{agg_windows}}
+
 \item{momentum_colname}{The name of the column holding the
 true momentum values (as a string),
 defaults to \code{"momentum"}.}
-
-\item{consider_negative_momentum}{\code{TRUE} to treat momentum as
-possibly negative, otherwise assumed to be nonnegative
-(see \code{\link{evaluate_momentum_at_window}()})}
 
 \item{aggregated_momentum_data}{A tibble
 of class \code{@eval{AGG_WINDOW_CLASS_NAME}} as returned from
 \code{\link{aggregate_price_and_mean_windows}}, with an
 added column of column name \code{momentum_colname}
 holding the momentum.}
+
+\item{consider_negative_momentum}{\code{TRUE} to treat momentum as
+signed (see \code{\link{evaluate_signed_momentum_at_window}()}),
+otherwise assumed to be regular momentum
+(see \code{\link{evaluate_momentum_at_window}()})}
 }
 \value{
 A column vector whose \eqn{i}th entry is the predicted

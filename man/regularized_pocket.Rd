@@ -21,7 +21,8 @@ uses linear regression}
 }
 \value{
 perceptron weights (bias, weights) where
-    \eqn{y ~ bias + x * weights}
+    \eqn{y ~ bias + x * weights}. Attribute \code{"niter"}
+    holds the iteration count
 }
 \description{
 Performs the Perceptron Learning Algorithm with weight elimination

@@ -80,8 +80,6 @@ aggregate_price_and_mean_windows <- function(price_relative_matrix,
     assert_that(is_whole_number(historic_mean_window_size))
     assert_that(historic_mean_window_size > 0)
     assert_that(rlang::is_scalar_logical(include_missing))
-    assert_that(rlang::is_scalar_logical(include_momentum))
-    assert_that(rlang::is_scalar_logical(include_nonnegative_momentum))
   }
   if(any(is.null(initial_prices))) {
     initial_prices = rep(1, ncol(price_relative_matrix))
@@ -127,7 +125,7 @@ aggregate_price_and_mean_windows <- function(price_relative_matrix,
     windows <- dplyr::inner_join(price_windows, mean_windows, by = by)
   }
 
-  class(windows) <- c(AGG_WINDOW_CLASS_NAME, class(window))
+  class(windows) <- c(AGG_WINDOW_CLASS_NAME, class(windows))
   windows %>%
     dplyr::arrange(trading_period, asset)
 }
@@ -175,10 +173,10 @@ aggregated_windows_var_to_matrix <- function(agg_windows, variable_name) {
 
 #' Evaluate momentum of the price
 #'
-#' We propose three estimators for the next price, and define
+#' We propose two estimators for the next price, and define
 #' its momentum by whichever is closest:
-#' the max of previous prices is momentum +1, the min of previous
-#' prices is momentum -1, and the historical mean is momentum 0
+#' the max of previous prices is momentum +1,
+#' and the historical mean is momentum 0
 #'
 #' Note that this definition of momentum is scale-invariant, i.e.
 #' if all the prices are scaled (and the historic price means
@@ -190,9 +188,6 @@ aggregated_windows_var_to_matrix <- function(agg_windows, variable_name) {
 #'     For some \eqn{\alpha\in[0,1]}, the historic price mean
 #'     is \eqn{MA_t = \alpha p_t + (1-\alpha) MA_{t-1}}, with
 #'     \eqn{MA_1 = p_1}.
-#' @param consider_negative_momentum If \code{FALSE}, then
-#'     does not consider -1 as an option for momentum, i.e.
-#'     only checks historic mean and max of previous prices
 #'
 #' @return the momentum defined in the description if all arguments
 #'     are present. If any of the first
@@ -201,19 +196,39 @@ aggregated_windows_var_to_matrix <- function(agg_windows, variable_name) {
 #' @export
 evaluate_momentum_at_window <- function(price_window,
                                         next_price,
-                                        historic_price_mean,
-                                        consider_negative_momentum = TRUE) {
+                                        historic_price_mean) {
   if(any(is.na(c(price_window, next_price, historic_price_mean)))) {
     return(NA)
-  }
-  if(consider_negative_momentum) {
-    ests <- c(min(price_window), historic_price_mean, max(price_window))
-    # index mapped from [1 2 3] -> [-1 0 1]
-    return(which.min(abs(ests - next_price)) - 2L)
   }
   ests <- c(historic_price_mean, max(price_window))
   # index mapped from [1 2] -> [0 1]
   which.min(abs(ests - next_price)) - 1L
+}
+
+#' Return the signed momentum
+#'
+#' Returns \code{1L} if \code{next_price} is further from
+#' \code{historic_price_mean} than \code{price}, and \code{0L} otherwise.
+#'
+#' @param price the current price (a scalar double)
+#' @param next_price the next price (a scalar double)
+#' @param historic_price_mean The current historic price mean (a scalar double)
+#' @return \code{0L} or \code{1L}, or \code{NA} if any of the arguments
+#'     is missing
+#'
+#' @export
+evaluate_signed_momentum_at_window <- function(price,
+                                               next_price,
+                                               historic_price_mean) {
+  if(any(is.na(c(price, next_price, historic_price_mean)))) {
+    return(NA)
+  }
+  old_sign <- sign(price - historic_price_mean)
+  new_sign <- sign(next_price - historic_price_mean)
+  if(old_sign == new_sign) {
+    return(1L)
+  }
+  0L
 }
 
 
@@ -229,16 +244,13 @@ evaluate_momentum_at_window <- function(price_window,
 #'     momentum. Must be at least 2 and no longer than
 #'     the price windows in \code{agg_windows}. Defaults to the
 #'     length of the price windows in \code{agg_windows}.
-#' @inheritParams evaluate_momentum_at_window
 #'
 #' @return An integer array whose \eqn{i}th entry holds the momentum
 #'     corresponding to the \eqn{i}th row of \code{agg_windows}.
 #'
 #' @importFrom assertthat assert_that
 #' @export
-evaluate_momentum <- function(agg_windows,
-                              momentum_window_size,
-                              consider_negative_momentum = TRUE) {
+evaluate_unsigned_momentum <- function(agg_windows, momentum_window_size) {
   assert_that(inherits(agg_windows, AGG_WINDOW_CLASS_NAME))
   # get size of price windows
   price_window_size <- agg_windows %>%
@@ -251,16 +263,14 @@ evaluate_momentum <- function(agg_windows,
   }
   assert_that(is_whole_number(momentum_window_size))
   assert_that(2 <= momentum_window_size &&
-                momentum_size_window <= price_window_size)
-  assert_that(rlang::is_scalar_logical(consider_negative_momentum))
+                momentum_window_size <= price_window_size)
   # now compute momentum
   agg_windows %>%
     mutate(price_window = purrr::map(price_window,
                                      tail,
                                      momentum_window_size)) %>%
-    purrr::pmap_int(agg_windows,
-                    evaluate_momentum_at_window,
-                    consider_negative_momentum = consider_negative_momentum)
+    dplyr::select(price_window, next_price, historic_price_mean) %>%
+    purrr::pmap_int(evaluate_momentum_at_window)
 }
 
 #' Evaluate momentum price prediction
@@ -272,11 +282,15 @@ evaluate_momentum <- function(agg_windows,
 #'     \code{\link{aggregate_price_and_mean_windows}}, with an
 #'     added column of column name \code{momentum_colname}
 #'     holding the momentum.
+#' @param momentum_window_size the size determining momentum,
+#'     which must be at least 2 and is assumed
+#'     to be at most the size of the price windows in \code{agg_windows}
 #' @param momentum_colname The name of the column holding the
 #'     true momentum values (as a string),
 #'     defaults to \code{"momentum"}.
 #' @param consider_negative_momentum \code{TRUE} to treat momentum as
-#'     possibly negative, otherwise assumed to be nonnegative
+#'     signed (see \code{\link{evaluate_signed_momentum_at_window}()}),
+#'     otherwise assumed to be regular momentum
 #'     (see \code{\link{evaluate_momentum_at_window}()})
 #'
 #' @return A column vector whose \eqn{i}th entry is the predicted
@@ -286,26 +300,33 @@ evaluate_momentum <- function(agg_windows,
 #' @importFrom assertthat assert_that has_name
 #' @export
 evaluate_momentum_predict_price <- function(agg_windows,
+                                            momentum_window_size,
                                             momentum_colname = "momentum",
-                                            consider_negative_momentum = TRUE) {
+                                            use_signed_momentum = TRUE) {
   # type checks
   assert_that(inherits(agg_windows, AGG_WINDOW_CLASS_NAME))
+  assert_that(is_whole_number(momentum_window_size))
+  assert_that(momentum_window_size > 1)
   assert_that(rlang::is_scalar_character(momentum_colname))
   assert_that(has_name(agg_windows, momentum_colname))
   assert_that(rlang::is_scalar_logical(consider_negative_momentum))
-  assert_that(any(consider_negative_momentum == c(TRUE, FALSE)))
+  assert_that(use_signed_momentum %in% c(TRUE, FALSE))
   # now do the predictions
-  if(consider_negative_momentum) {
+  if(use_signed_momentum) {
+
     price_predictor <- function(price_window, historic_price_mean, momentum) {
       if(any(is.na(c(price_window, historic_price_mean, momentum)))) {
         return(NA)
       }
+      # If momentum is 1, take extremal value in window on right side
+      # of the mean
       if(momentum == 1L) {
-        return(max(price_window))
+        if(tail(price_window, 1) > historic_price_mean) {
+          return(max(tail(price_window, momentum_window_size)))
+        }
+        return(min(tail(price_window, momentum_window_size)))
       }
-      else if(momentum == -1L) {
-        return(min(price_window))
-      }
+      # Otherwise return the historic price mean
       historic_price_mean
     }
   }
@@ -315,7 +336,7 @@ evaluate_momentum_predict_price <- function(agg_windows,
         return(NA)
       }
       if(momentum == 1L) {
-        return(max(price_window))
+        return(max(tail(price_window, momentum_window_size)))
       }
       historic_price_mean
     }

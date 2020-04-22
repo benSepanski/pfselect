@@ -4,12 +4,7 @@
 \alias{evaluate_momentum_at_window}
 \title{Evaluate momentum of the price}
 \usage{
-evaluate_momentum_at_window(
-  price_window,
-  next_price,
-  historic_price_mean,
-  consider_negative_momentum = TRUE
-)
+evaluate_momentum_at_window(price_window, next_price, historic_price_mean)
 }
 \arguments{
 \item{price_window}{of asset in period \eqn{t-\tau+1,...t}}
@@ -20,10 +15,6 @@ evaluate_momentum_at_window(
 For some \eqn{\alpha\in[0,1]}, the historic price mean
 is \eqn{MA_t = \alpha p_t + (1-\alpha) MA_{t-1}}, with
 \eqn{MA_1 = p_1}.}
-
-\item{consider_negative_momentum}{If \code{FALSE}, then
-does not consider -1 as an option for momentum, i.e.
-only checks historic mean and max of previous prices}
 }
 \value{
 the momentum defined in the description if all arguments
@@ -31,10 +22,10 @@ the momentum defined in the description if all arguments
     three arguments are \code{NA}, returns \code{NA}.
 }
 \description{
-We propose three estimators for the next price, and define
+We propose two estimators for the next price, and define
 its momentum by whichever is closest:
-the max of previous prices is momentum +1, the min of previous
-prices is momentum -1, and the historical mean is momentum 0
+the max of previous prices is momentum +1,
+and the historical mean is momentum 0
 }
 \details{
 Note that this definition of momentum is scale-invariant, i.e.
