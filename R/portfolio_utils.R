@@ -179,7 +179,9 @@ compute_historical_price_mean_matrix <- function(price_matrix,
   }
   price_matrix %>%
     purrr::array_branch(2L) %>%
-    purrr::map(compute_historical_price_means, .check_input = .check_input) %>%
+    purrr::map(compute_historical_price_means,
+               decay_factor = decay_factor,
+               .check_input = .check_input) %>%
     purrr::flatten_dbl() %>%
     matrix(ncol = ncol(price_matrix)) %>%
     `colnames<-`(colnames(price_matrix))

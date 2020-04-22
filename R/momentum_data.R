@@ -256,6 +256,7 @@ evaluate_unsigned_momentum <- function(agg_windows, momentum_window_size) {
   price_window_size <- agg_windows %>%
     select(price_window) %>%
     drop_na() %>%
+    pull(price_window) %>%
     pluck(1L) %>%
     length()
   if(missing(momentum_window_size)) {

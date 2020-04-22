@@ -204,7 +204,7 @@ regularized_pocket <- function(x, y,
 
   # initialize weights with linear regression if NULL
   if(is.null(initial_weights)) {
-    if(nrow(x) > ncol(x)) {
+    if(nrow(x) > ncol(x) && Matrix::rankMatrix(x) > ncol(x)) {
       least_squares_sol <- lsfit(x = x, y = y)
       bias <- least_squares_sol$coef[1]
       weights <- least_squares_sol$coef[-1]
@@ -311,20 +311,17 @@ predict_momentum_pocket <- function(data,
     max_cv_window <- nrow(data)
   }
   # Spread out features into columns
-  momentum <- enquo(momentum_colname)
   spread_data <- data %>%
+    dplyr::select(trading_period,
+                  asset,
+                  !!feature_colname) %>%
     tidyr::unnest(!!feature_colname) %>%
     dplyr::group_by(trading_period, asset) %>%
-    dplyr::mutate(pocket_feature_index = as.character(
-      glue::glue("pocket_feature_{1:n()}"))) %>%
+    dplyr::mutate(pocket_feature_index = as.character(glue::glue("pocket_feature_{1:n()}"))) %>%
     tidyr::pivot_wider(names_from = pocket_feature_index,
                        values_from = !!feature_colname) %>%
     dplyr::ungroup(trading_period, asset) %>%
-    dplyr::mutate(pm_one_momentum = sign(.data[[momentum_colname]] * 2 - 1)) %>%
-    dplyr::select(trading_period,
-                  asset,
-                  pm_one_momentum,
-                  tidyselect::matches("pocket_feature_\\d+"))
+    dplyr::mutate(pm_one_momentum = sign(!!data[[momentum_colname]] * 2 - 1))
 
   # Get unique trading periods and assets
   trading_periods <- data %>%
@@ -336,6 +333,9 @@ predict_momentum_pocket <- function(data,
   x <- spread_data %>%
     dplyr::select(tidyselect::matches("pocket_feature_\\d+")) %>%
     as.matrix()
+  if(any(is.na(x))) {
+    0
+  }
   # TODO Make sure more than 1 trading period
   # Store cumulative errors
   we_errors <- tibble::tibble(trading_period = trading_periods,
@@ -425,6 +425,7 @@ rebase_agg_windows <- function(agg_windows,
                                new_assets,
                                asset_rownames,
                                scalar_columns_to_rebase = NULL) {
+  message("Be sure new_assets does not have entries before there are windows")
   # type checks
   # TODO MORE type checking
   # TODO check columns
@@ -462,13 +463,12 @@ rebase_agg_windows <- function(agg_windows,
     assert_that(min(window_lengths) == max(window_lengths))
     # Repeatedly operate on ith entry inwindow
     for(i in 1:min(window_lengths)) {
-      0
       ith_scalar <- agg_windows %>%
-        dplyr::mutate(window_scalar_col = purrr::map_dbl(window_col, ~.[[i]])) %>%
+        dplyr::mutate(window_scalar_col = purrr::map_dbl(window_col, ~.[i])) %>%
         rebase_scalar("window_scalar_col") %>%
         dplyr::pull("window_scalar_col")
       for(j in seq_along(ith_scalar)) {
-        window_col[[i]][j] <- ith_scalar[j]
+        window_col[[j]][i] <- ith_scalar[j]
       }
     }
     agg_windows[[window]] <- window_col
