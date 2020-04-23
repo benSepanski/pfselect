@@ -24,6 +24,9 @@ predict_window_momentum_LOAD <- function(prev_prices,
                                          regularization_factor,
                                          momentum_threshold,
                                          min_var = .Machine$double.eps ^ 0.5) {
+  if(any(is.na(c(prev_prices)))) {
+    return(NA)
+  }
   regularized_slope <- 0
   # avoid constant case
   if(var(prev_prices) > min_var) {
@@ -167,7 +170,7 @@ predict_momentum_LOAD <- function(aggregated_momentum_data,
 #' @param weight_elimination \eqn{\lambda} in the description
 #' @param maxit the maximum number of iterations
 #' @param initial_weights the initial weights. If missing or NULL,
-#'    uses linear regression
+#'    uses near zero weights
 #'
 #' @return perceptron weights (bias, weights) where
 #'     \eqn{y ~ bias + x * weights}. Attribute \code{"niter"}
@@ -204,15 +207,9 @@ regularized_pocket <- function(x, y,
 
   # initialize weights with linear regression if NULL
   if(is.null(initial_weights)) {
-    if(nrow(x) > ncol(x) && Matrix::rankMatrix(x) > ncol(x)) {
-      least_squares_sol <- lsfit(x = x, y = y)
-      bias <- least_squares_sol$coef[1]
-      weights <- least_squares_sol$coef[-1]
-    }
-    else {
-      bias <- rnorm(1, sd = 0.05)
-      weights <- rnorm(ncol(x), sd = 0.05)
-    }
+    # TODO use least squares
+    bias <- rnorm(1, sd = 0.05)
+    weights <- rnorm(ncol(x), sd = 0.05)
   }
   else {
     bias <- initial_weights[1]
@@ -221,7 +218,7 @@ regularized_pocket <- function(x, y,
   # Begin PLA
   lambda <- weight_elimination / nrow(x)
   misclassified <- sign(bias + x %*% weights) != y
-  error <- mean(misclassified)
+  error <- mean(misclassified, na.rm = TRUE)
   iter <- 1
   while(error > 0 && iter <= maxit) {
     iter <- iter + 1
@@ -231,16 +228,18 @@ regularized_pocket <- function(x, y,
     # Get shrinking update
     shrink_update <- c(0, -lambda * weights / (1 + weights^2)^2)
     for(update in list(pla_update, shrink_update)) {
-      new_weights <- weights + update[-1]
-      new_bias <- bias + update[1]
-      # if new weights are better, use them!
-      new_misclassified <- sign(new_bias + x %*% new_weights) != y
-      new_error <- mean(new_misclassified)
-      if(new_error <= error) {
-        weights <- new_weights
-        bias <- new_bias
-        misclassified <- new_misclassified
-        error <- new_error
+      if(!any(is.na(update))) {
+        new_weights <- weights + update[-1]
+        new_bias <- bias + update[1]
+        # if new weights are better, use them!
+        new_misclassified <- sign(new_bias + x %*% new_weights) != y
+        new_error <- mean(new_misclassified, na.rm = TRUE)
+        if(new_error <= error) {
+          weights <- new_weights
+          bias <- new_bias
+          misclassified <- new_misclassified
+          error <- new_error
+        }
       }
     }
   }
@@ -353,6 +352,9 @@ predict_momentum_pocket <- function(data,
     prev_rows <- which(spread_data$trading_period < tp)
     tp_rows <- which(spread_data$trading_period == tp)
     we_index <- nnet::which.is.max(-we_errors$errors[[iter]])
+    if(is.na(we_index)) {
+      we_index <- sample(1:length(weight_elimination), 1)
+    }
     # predict momentum
     predictions <- weight_elimination %>%
       purrr::map(~regularized_pocket(x = x[prev_rows, ],
@@ -425,7 +427,7 @@ rebase_agg_windows <- function(agg_windows,
                                new_assets,
                                asset_rownames,
                                scalar_columns_to_rebase = NULL) {
-  message("Be sure new_assets does not have entries before there are windows")
+  message("I don't check this, so be sure new_assets does not have entries before there are windows")
   # type checks
   # TODO MORE type checking
   # TODO check columns
@@ -477,6 +479,8 @@ rebase_agg_windows <- function(agg_windows,
   agg_windows
 }
 
+# TODO: Rename bc could be any matrix not just relatives
+
 #' Get eigenvalue decompositions for each time step
 #'
 #' Returns a list with two sublists: values and vectors.
@@ -506,6 +510,8 @@ compute_price_relatives_eigen <- function(price_relative_matrix) {
     purrr::prepend(list(id_decomp, id_decomp)) %>%
     purrr::transpose()
 }
+
+# TODO: Rename bc could be any matrix not just relatives
 
 #' Get whitener for each time step
 #'
@@ -560,6 +566,9 @@ rescale_to_price_over_mean <- function(agg_windows) {
   assert_that(!has_name(agg_windows, "cor_sign"))
   # Now make the cor sign
   get_flip_sign <- function(price, historic_price_mean) {
+    if(any(is.na(c(price, historic_price_mean)))) {
+      return(NA)
+    }
     s <- sign(price - historic_price_mean)
     if(s == 0) {
       s <- 1

@@ -310,7 +310,7 @@ evaluate_momentum_predict_price <- function(agg_windows,
   assert_that(momentum_window_size > 1)
   assert_that(rlang::is_scalar_character(momentum_colname))
   assert_that(has_name(agg_windows, momentum_colname))
-  assert_that(rlang::is_scalar_logical(consider_negative_momentum))
+  assert_that(rlang::is_scalar_logical(use_signed_momentum))
   assert_that(use_signed_momentum %in% c(TRUE, FALSE))
   # now do the predictions
   if(use_signed_momentum) {
@@ -347,7 +347,7 @@ evaluate_momentum_predict_price <- function(agg_windows,
     dplyr::select(price_window,
                   historic_price_mean,
                   !!enquo(momentum_colname)) %>%
-    dplyr::rename(momentum = !!enquoe(momentum_colname)) %>%
+    dplyr::rename(momentum = !!enquote(momentum_colname)) %>%
     purrr::pmap_dbl(price_predictor)
 }
 
